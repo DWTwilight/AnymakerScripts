@@ -14,6 +14,12 @@
 - RR_Door_Handle.is_active
   - Boolean
   - true means the rear-right door handle is opened
+- Trunk_Handle.is_active
+  - Boolean
+  - true means the trunk handle is opened
+- Hood_Handle.is_active
+  - Boolean
+  - true means the hood handle is opened
 - Door_Lock.is_pressed
   - Boolean
   - true means door lock is pressed
@@ -30,5 +36,11 @@
   - Fractional
   - 0.0 means closed, 1.0 means open
 - ASM_RR_Door_Latch.input
+  - Fractional
+  - 0.0 means closed, 1.0 means open
+- ASM_Trunk_Latch.input
+  - Fractional
+  - 0.0 means closed, 1.0 means open
+- ASM_Hood_Latch.input
   - Fractional
   - 0.0 means closed, 1.0 means open

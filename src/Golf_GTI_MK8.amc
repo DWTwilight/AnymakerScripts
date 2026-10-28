@@ -27,6 +27,12 @@ define function door_lock_on_tick ()
 
 	call bool_to_fraction (out RR_Door_Handle.is_active && ! (out Door_Lock.is_pressed), var latchValue)
 	in ASM_RR_Door_Latch.input = var latchValue
+
+	call bool_to_fraction (out Trunk_Handle.is_active && ! (out Door_Lock.is_pressed), var latchValue)
+	in ASM_Trunk_Latch.input = var latchValue
+
+	call bool_to_fraction (out Hood_Handle.is_active && ! (out Door_Lock.is_pressed), var latchValue)
+	in ASM_Hood_Latch.input = var latchValue
 }
 
 on_tick
