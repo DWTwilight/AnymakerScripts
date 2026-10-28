@@ -1,0 +1,25 @@
+# bool -> 1.0 / 0.0
+define function bool_to_fraction (bool value, fractional result)
+{
+	if (param value)
+	{
+		param result = 1.0
+	}
+	else
+	{
+		param result = 0.0
+	}
+}
+
+# FL door latch logic
+define function door_lock_on_tick ()
+{
+	define var fractional latchValue
+	call bool_to_fraction (out FL_Door_Handle.is_active && ! (out Door_Lock.is_pressed), var latchValue)
+	in ASM_FL_Door_Latch.input = var latchValue
+}
+
+on_tick
+{
+	call door_lock_on_tick ()
+}
