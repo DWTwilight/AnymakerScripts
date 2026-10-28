@@ -11,12 +11,22 @@ define function bool_to_fraction (bool value, fractional result)
 	}
 }
 
-# FL door latch logic
+# door latch logic
 define function door_lock_on_tick ()
 {
 	define var fractional latchValue
+
 	call bool_to_fraction (out FL_Door_Handle.is_active && ! (out Door_Lock.is_pressed), var latchValue)
 	in ASM_FL_Door_Latch.input = var latchValue
+
+	call bool_to_fraction (out FR_Door_Handle.is_active && ! (out Door_Lock.is_pressed), var latchValue)
+	in ASM_FR_Door_Latch.input = var latchValue
+
+	call bool_to_fraction (out RL_Door_Handle.is_active && ! (out Door_Lock.is_pressed), var latchValue)
+	in ASM_RL_Door_Latch.input = var latchValue
+
+	call bool_to_fraction (out RR_Door_Handle.is_active && ! (out Door_Lock.is_pressed), var latchValue)
+	in ASM_RR_Door_Latch.input = var latchValue
 }
 
 on_tick
