@@ -11,6 +11,62 @@ define function bool_to_fraction (bool value, fractional result)
 	}
 }
 
+# power & lights state
+define var integer powerState
+define var bool lastStartPressed
+var powerState = 0
+var lastStartPressed = false
+
+# power state machine
+define function power_on_tick ()
+{
+	if (out Btn_Start_Stop.is_pressed && ! (var lastStartPressed))
+	{
+		if (var powerState == 0)
+		{
+			if (out Steering_Wheel.left_pedal > 0.5)
+			{
+				var powerState = 2
+			}
+			else
+			{
+				var powerState = 1
+			}
+		}
+		elseif (var powerState == 1)
+		{
+			if (out Steering_Wheel.left_pedal > 0.5)
+			{
+				var powerState = 2
+			}
+			else
+			{
+				var powerState = 0
+			}
+		}
+		elseif (var powerState == 2)
+		{
+			var powerState = 0
+		}
+	}
+	var lastStartPressed = out Btn_Start_Stop.is_pressed
+
+	define var bool mainOn
+	var mainOn = var powerState > 0
+
+	define var fractional mainValue
+	define var fractional engineValue
+	call bool_to_fraction (var mainOn, var mainValue)
+	call bool_to_fraction (var powerState == 2, var engineValue)
+	in ASM_Power_Main.input = var mainValue
+	in ASM_Power_Engine.input = var engineValue
+
+	in Btn_Start_Stop.is_illuminated = var mainOn
+	in Dial_RPM.is_illuminated = var mainOn
+	in Dial_Speed.is_illuminated = var mainOn
+	in Display_Gear.is_illuminated = var mainOn
+}
+
 # door latch logic
 define function door_lock_on_tick ()
 {
@@ -37,5 +93,6 @@ define function door_lock_on_tick ()
 
 on_tick
 {
+	call power_on_tick ()
 	call door_lock_on_tick ()
 }
