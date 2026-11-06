@@ -1,6 +1,8 @@
 # Golf GTI MK8 Scripting Context
 
-## Databus Inputs (Out Variables)
+## Doors and Locks
+
+### Databus Inputs (Out Variables)
 
 - FL_Door_Handle.is_active
   - Boolean
@@ -24,7 +26,7 @@
   - Boolean
   - true means door lock is pressed
 
-## Databus Outputs (In Variables)
+### Databus Outputs (In Variables)
 
 - ASM_FL_Door_Latch.input
   - Fractional
