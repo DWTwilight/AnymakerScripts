@@ -103,3 +103,52 @@ Power_State
     - If break input > 0.5, 1 -> 2
     - If no break (<= 0.5), 1 -> 0
   - if current state is 2, 2 -> 0
+
+## Engine
+
+### Databus Inputs (Out Variables)
+
+- Engine.rps
+  - Fractional
+  - the engine starts at 6 rps (360 RPM)
+- Steering_Wheel.right_pedal
+  - Fractional
+  - Throttle input, 0(no Throttle) -> 1(full Throttle)
+
+### Databus Outputs (In Variables)
+
+- ASM_Power_Starter.input
+  - Fractional
+  - Engine Starter Power Relay(1 -> on)
+- ASM_Throttle.input
+  - Fractional
+  - Actual Engine Throttle Input, 0(no Throttle) -> 1(full Throttle)
+
+### Logic
+
+Global state:
+
+```txt
+Power_State         # from Power & Lights
+
+IDLE_RPS = 13.5
+STARTER_CUTOFF_RPS = 6.5
+MIN_IDLE_THROTTLE = 0.05
+```
+
+- If `Power_State` is not 2:
+  - set `ASM_Power_Starter.input` -> 0.0
+  - set `ASM_Throttle.input` -> 0.0
+- else `Power_State` is 2:
+  - Starter Logic:
+    - set `ASM_Power_Starter.input` -> 1.0 if `Engine.rps < STARTER_CUTOFF_RPS`, else 0.0
+    - no latch needed: once RPS reaches 6.5 the starter cuts, and the throttle below stays at 1.0 until RPS > 8.5, so the engine keeps accelerating instead of chattering
+  - Throttle Logic (always evaluated while `Power_State` is 2):
+    1. calculate minimal throttle to keep idle (anti-stall), constant global `IDLE_RPS` (13.5)
+       - `minimalThrottle = (IDLE_RPS - Engine.rps) * 0.2`
+       - clamp `minimalThrottle` to `[MIN_IDLE_THROTTLE, 1.0]`
+       - this is 1.0 for all `Engine.rps <= 8.5`, so cranking naturally gets full throttle
+    2. apply pedal input:
+       - `engineThrottle = minimalThrottle + (1.0 - minimalThrottle) * pedalInput`
+       - clamp `engineThrottle` to `[MIN_IDLE_THROTTLE, 1.0]`
+    3. set `ASM_Throttle.input` -> `engineThrottle`

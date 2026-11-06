@@ -11,6 +11,23 @@ define function bool_to_fraction (bool value, fractional result)
 	}
 }
 
+# clamp value to min - max
+define function clamp (fractional inputValue, fractional minValue, fractional maxValue, fractional clampedResult)
+{
+	if (param inputValue < param minValue)
+	{
+		param clampedResult = param minValue
+	}
+	elseif (param inputValue > param maxValue)
+	{
+		param clampedResult = param maxValue
+	}
+	else
+	{
+		param clampedResult = param inputValue
+	}
+}
+
 # power & lights state
 define var integer powerState
 define var bool lastStartPressed
@@ -67,6 +84,43 @@ define function power_on_tick ()
 	in Display_Gear.is_illuminated = var mainOn
 }
 
+# engine constants
+define var fractional idleRps
+define var fractional starterCutoffRps
+define var fractional minIdleThrottle
+var idleRps = 13.5
+var starterCutoffRps = 6.5
+var minIdleThrottle = 0.05
+
+# engine logic
+define function engine_on_tick ()
+{
+	define var fractional starterValue
+	define var fractional throttleValue
+
+	if (var powerState == 2)
+	{
+		define var fractional rawMinimal
+		define var fractional clampedMinimal
+		define var fractional rawThrottle
+
+		call bool_to_fraction (out Engine.rps < var starterCutoffRps, var starterValue)
+
+		var rawMinimal = (var idleRps - out Engine.rps) * 0.2
+		call clamp (var rawMinimal, var minIdleThrottle, 1.0, var clampedMinimal)
+		var rawThrottle = var clampedMinimal + (1.0 - var clampedMinimal) * out Steering_Wheel.right_pedal
+		call clamp (var rawThrottle, var minIdleThrottle, 1.0, var throttleValue)
+	}
+	else
+	{
+		var starterValue = 0.0
+		var throttleValue = 0.0
+	}
+
+	in ASM_Power_Starter.input = var starterValue
+	in ASM_Throttle.input = var throttleValue
+}
+
 # door latch logic
 define function door_lock_on_tick ()
 {
@@ -94,5 +148,6 @@ define function door_lock_on_tick ()
 on_tick
 {
 	call power_on_tick ()
+	call engine_on_tick ()
 	call door_lock_on_tick ()
 }
