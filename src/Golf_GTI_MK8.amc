@@ -131,7 +131,7 @@ var WHEEL_BASE = 2.72
 var TRACK_WIDTH = 1.52
 var MAX_VIRTUAL_STEER_ANG = 0.5236
 var STEER_DEAD_ZONE = 0.001
-# full-lock inner angle, computed once at load
+# derive inner angle at load
 var MAX_INNER_STEER_ANGLE = atan (var WHEEL_BASE / (var WHEEL_BASE / tan (var MAX_VIRTUAL_STEER_ANG) - var TRACK_WIDTH * 0.5))
 
 # ackermann steering logic
