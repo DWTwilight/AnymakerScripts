@@ -152,3 +152,38 @@ MIN_IDLE_THROTTLE = 0.05
        - `engineThrottle = minimalThrottle + (1.0 - minimalThrottle) * pedalInput`
        - clamp `engineThrottle` to `[MIN_IDLE_THROTTLE, 1.0]`
     3. set `ASM_Throttle.input` -> `engineThrottle`
+
+## Steering
+
+### Databus Inputs (Out Variables)
+
+- Steering_Wheel.steering
+  - Fractional
+  - Throttle input, -1(full left) -> 1(full right)
+
+### Databus Outputs (In Variables)
+
+- ASM_Steering_Left.input
+  - Fractional
+  - steering left input (-1 - 1), 1 is turing left
+- ASM_Steering_Right.input
+  - Fractional
+  - steering right input (-1 - 1), 1 is turning right
+
+### Logic
+
+Calculate accurate steering based on Ackermann steering geometry.
+
+Constants:
+- WHEEL_BASE: 2.72m
+- TRACK_WIDTH: 1.52m
+- MAX_VIRTUAL_STEER_ANG: 0.5236(rad, 30 degrees)
+- STEER_DEAD_ZONE: 0.001 (|steering| below this is treated as straight)
+- MAX_INNER_STEER_ANGLE: computed at full lock as
+  `atan(WHEEL_BASE / (WHEEL_BASE / tan(MAX_VIRTUAL_STEER_ANG) - TRACK_WIDTH / 2))`,
+  ≈ 0.6025 rad (34.5°); used to normalize both wheel angles so the inner wheel
+  reaches 1.0 at full lock
+
+Sign convention (physical left/right wheels): positive turns toward that wheel's
+side. A right turn gives `Right = +inner`, `Left = -outer`; a left turn gives
+`Left = +inner`, `Right = -outer`; straight gives both 0.

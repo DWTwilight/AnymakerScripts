@@ -85,12 +85,12 @@ define function power_on_tick ()
 }
 
 # engine constants
-define var fractional idleRps
-define var fractional starterCutoffRps
-define var fractional minIdleThrottle
-var idleRps = 13.5
-var starterCutoffRps = 6.5
-var minIdleThrottle = 0.05
+define var fractional IDLE_RPS
+define var fractional STARTER_CUTOFF_RPS
+define var fractional MIN_IDLE_THROTTLE
+var IDLE_RPS = 13.5
+var STARTER_CUTOFF_RPS = 6.5
+var MIN_IDLE_THROTTLE = 0.05
 
 # engine logic
 define function engine_on_tick ()
@@ -104,12 +104,12 @@ define function engine_on_tick ()
 		define var fractional clampedMinimal
 		define var fractional rawThrottle
 
-		call bool_to_fraction (out Engine.rps < var starterCutoffRps, var starterValue)
+		call bool_to_fraction (out Engine.rps < var STARTER_CUTOFF_RPS, var starterValue)
 
-		var rawMinimal = (var idleRps - out Engine.rps) * 0.2
-		call clamp (var rawMinimal, var minIdleThrottle, 1.0, var clampedMinimal)
+		var rawMinimal = (var IDLE_RPS - out Engine.rps) * 0.2
+		call clamp (var rawMinimal, var MIN_IDLE_THROTTLE, 1.0, var clampedMinimal)
 		var rawThrottle = var clampedMinimal + (1.0 - var clampedMinimal) * out Steering_Wheel.right_pedal
-		call clamp (var rawThrottle, var minIdleThrottle, 1.0, var throttleValue)
+		call clamp (var rawThrottle, var MIN_IDLE_THROTTLE, 1.0, var throttleValue)
 	}
 	else
 	{
@@ -119,6 +119,58 @@ define function engine_on_tick ()
 
 	in ASM_Power_Starter.input = var starterValue
 	in ASM_Throttle.input = var throttleValue
+}
+
+# steering constants
+define var fractional WHEEL_BASE
+define var fractional TRACK_WIDTH
+define var fractional MAX_VIRTUAL_STEER_ANG
+define var fractional MAX_INNER_STEER_ANGLE
+define var fractional STEER_DEAD_ZONE
+var WHEEL_BASE = 2.72
+var TRACK_WIDTH = 1.52
+var MAX_VIRTUAL_STEER_ANG = 0.5236
+var STEER_DEAD_ZONE = 0.001
+# full-lock inner angle, computed once at load
+var MAX_INNER_STEER_ANGLE = atan (var WHEEL_BASE / (var WHEEL_BASE / tan (var MAX_VIRTUAL_STEER_ANG) - var TRACK_WIDTH * 0.5))
+
+# ackermann steering logic
+define function steering_on_tick ()
+{
+	define var fractional steerInput
+	define var fractional virtualSteerRadius
+	define var fractional innerNorm
+	define var fractional outerNorm
+	define var fractional leftSteeringVal
+	define var fractional rightSteeringVal
+
+	var steerInput = out Steering_Wheel.steering
+	if (abs (var steerInput) < var STEER_DEAD_ZONE)
+	{
+		var leftSteeringVal = 0.0
+		var rightSteeringVal = 0.0
+	}
+	else
+	{
+		var virtualSteerRadius = var WHEEL_BASE / tan (abs (var steerInput) * var MAX_VIRTUAL_STEER_ANG)
+		var innerNorm = atan (var WHEEL_BASE / (var virtualSteerRadius - var TRACK_WIDTH * 0.5)) / var MAX_INNER_STEER_ANGLE
+		var outerNorm = atan (var WHEEL_BASE / (var virtualSteerRadius + var TRACK_WIDTH * 0.5)) / var MAX_INNER_STEER_ANGLE
+		if (var steerInput > 0.0)
+		{
+			# right wheel = inner
+			var rightSteeringVal = var innerNorm
+			var leftSteeringVal = 0.0 - var outerNorm
+		}
+		else
+		{
+			# left wheel = inner
+			var leftSteeringVal = var innerNorm
+			var rightSteeringVal = 0.0 - var outerNorm
+		}
+	}
+
+	in ASM_Steering_Left.input = var leftSteeringVal
+	in ASM_Steering_Right.input = var rightSteeringVal
 }
 
 # door latch logic
@@ -149,5 +201,6 @@ on_tick
 {
 	call power_on_tick ()
 	call engine_on_tick ()
+	call steering_on_tick ()
 	call door_lock_on_tick ()
 }
