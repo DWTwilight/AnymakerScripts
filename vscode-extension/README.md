@@ -20,13 +20,13 @@ actually hosts the folder:
 2. Install into Windows VS Code (local folder):
 
    ```sh
-   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.5.0.vsix")" --force
+   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.6.0.vsix")" --force
    ```
 
    Or, inside a Remote-WSL window, use the integrated terminal:
 
    ```sh
-   code --install-extension "$PWD/anymaker-scripting-0.5.0.vsix" --force
+   code --install-extension "$PWD/anymaker-scripting-0.6.0.vsix" --force
    ```
 
 3. Reload VS Code.
@@ -102,3 +102,21 @@ Type a prefix and press `Tab`:
 The Outline view and breadcrumbs list top-level variables, functions, custom
 types (with their members), and the `on_tick` entrypoint. Function parameters
 appear as children of their function.
+
+## Folding
+
+Blocks fold from their declaration line (`define function`, `define type`,
+`on_tick`) instead of only from the `{` line. Nested `{}` blocks still fold, and
+consecutive `#` comment lines fold as a comment region.
+
+## Indentation
+
+Pressing `Enter` after a line ending in `{` indents the next line, and a line
+that starts with `}` outdents. The editor's normal indent settings (tabs or
+spaces) are respected.
+
+## Hover
+
+Hover a built-in, type, keyword, or declared symbol to see its signature and a
+short description. Declared globals, functions, types, members, and parameters
+show their declaration form.

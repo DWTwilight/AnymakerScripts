@@ -4,6 +4,8 @@ const vscode = require('vscode');
 const { analyze } = require('./analyzer');
 const { check } = require('./checker');
 const { documentSymbols } = require('./symbols');
+const { foldingRanges } = require('./folding');
+const { lookupHover } = require('./hover');
 
 const SYMBOL_KINDS = {
   function: vscode.SymbolKind.Function,
@@ -120,6 +122,73 @@ function toDocumentSymbol(document, symbol) {
   return result;
 }
 
+function findSymbol(symbols, name) {
+  for (const symbol of symbols) {
+    if (symbol.name === name) return symbol;
+    if (symbol.children) {
+      const found = findSymbol(symbol.children, name);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function symbolDeclaration(symbol) {
+  const detail = symbol.detail ? `${symbol.detail} ` : '';
+  switch (symbol.kind) {
+    case 'function':
+      return `define function ${symbol.name} (...)`;
+    case 'type':
+      return `define type ${symbol.name}`;
+    case 'variable':
+      return `define var ${detail}${symbol.name}`;
+    case 'event':
+      return 'on_tick';
+    case 'param':
+      return `param ${detail}${symbol.name}`;
+    case 'member':
+      return `define member ${detail}${symbol.name}`;
+    default:
+      return `${detail}${symbol.name}`;
+  }
+}
+
+function provideHover(document, position) {
+  const range = document.getWordRangeAtPosition(position, /[A-Za-z_][A-Za-z0-9_]*/);
+  if (!range) return null;
+  const word = document.getText(range);
+  let symbol = null;
+  try {
+    symbol = findSymbol(documentSymbols(document.getText()), word);
+  } catch (error) {
+    symbol = null;
+  }
+  const info = lookupHover(word);
+  if (!symbol && !info) return null;
+  const markdown = new vscode.MarkdownString();
+  if (symbol) {
+    markdown.appendCodeblock(symbolDeclaration(symbol), 'amc');
+  }
+  if (info) {
+    if (symbol) markdown.appendMarkdown('\n---\n');
+    if (info.signature) markdown.appendCodeblock(info.signature, 'amc');
+    if (info.description) markdown.appendMarkdown(info.description);
+  }
+  return new vscode.Hover(markdown, range);
+}
+
+function provideFoldingRanges(document) {
+  try {
+    return foldingRanges(document.getText()).map((range) => {
+      const kind =
+        range.kind === 'comment' ? vscode.FoldingRangeKind.Comment : vscode.FoldingRangeKind.Region;
+      return new vscode.FoldingRange(range.startLine, range.endLine, kind);
+    });
+  } catch (error) {
+    return [];
+  }
+}
+
 function provideCodeActions(document, range, context) {
   const items = checked.get(document.uri.toString());
   if (!items) return [];
@@ -192,6 +261,8 @@ function activate(context) {
         }
       },
     }),
+    vscode.languages.registerHoverProvider('anymaker', { provideHover }),
+    vscode.languages.registerFoldingRangeProvider('anymaker', { provideFoldingRanges }),
     vscode.window.onDidChangeVisibleTextEditors(() => updateVisible()),
     vscode.window.onDidChangeActiveTextEditor((editor) => updateEditor(editor)),
     vscode.window.onDidChangeActiveColorTheme(() => {

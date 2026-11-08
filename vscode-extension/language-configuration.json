@@ -19,5 +19,19 @@
     ["(", ")"],
     ["\"", "\""]
   ],
-  "wordPattern": "[A-Za-z_][A-Za-z0-9_]*"
+  "wordPattern": "[A-Za-z_][A-Za-z0-9_]*",
+  "indentationRules": {
+    "increaseIndentPattern": "^.*\\{\\s*(#.*)?$",
+    "decreaseIndentPattern": "^\\s*\\}"
+  },
+  "onEnterRules": [
+    {
+      "beforeText": "^\\s*\\{\\s*$",
+      "action": { "indent": "indent" }
+    },
+    {
+      "beforeText": "^\\s*\\}\\s*$",
+      "action": { "indent": "outdent" }
+    }
+  ]
 }
