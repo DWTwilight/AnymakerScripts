@@ -2,7 +2,7 @@
   "name": "anymaker-scripting",
   "displayName": "AnyMaker Scripting",
   "description": "Syntax highlighting, scope-aware coloring, diagnostics, snippets, and IntelliSense for AnyMaker .amc scripts",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "publisher": "local",
   "main": "./extension.js",
   "extensionKind": [
@@ -32,7 +32,11 @@
         "extensions": [
           ".amc"
         ],
-        "configuration": "./language-configuration.json"
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/anymaker.svg",
+          "dark": "./icons/anymaker.svg"
+        }
       }
     ],
     "grammars": [

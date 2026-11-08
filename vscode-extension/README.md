@@ -20,13 +20,13 @@ actually hosts the folder:
 2. Install into Windows VS Code (local folder):
 
    ```sh
-   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.10.0.vsix")" --force
+   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.11.0.vsix")" --force
    ```
 
    Or, inside a Remote-WSL window, use the integrated terminal:
 
    ```sh
-   code --install-extension "$PWD/anymaker-scripting-0.10.0.vsix" --force
+   code --install-extension "$PWD/anymaker-scripting-0.11.0.vsix" --force
    ```
 
 3. Reload VS Code.
