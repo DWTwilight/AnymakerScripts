@@ -1,6 +1,7 @@
 # AnyMaker Scripting (VS Code extension)
 
-Syntax highlighting for AnyMaker `.amc` scripts.
+Syntax highlighting, scope-aware coloring, and diagnostics for AnyMaker `.amc`
+scripts.
 
 ## Install (Remote-WSL, Windows VS Code)
 
@@ -19,13 +20,13 @@ actually hosts the folder:
 2. Install into Windows VS Code (local folder):
 
    ```sh
-   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.3.0.vsix")" --force
+   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.4.0.vsix")" --force
    ```
 
    Or, inside a Remote-WSL window, use the integrated terminal:
 
    ```sh
-   code --install-extension "$PWD/anymaker-scripting-0.3.0.vsix" --force
+   code --install-extension "$PWD/anymaker-scripting-0.4.0.vsix" --force
    ```
 
 3. Reload VS Code.
@@ -57,4 +58,23 @@ Colors adapt to the active dark/light/high-contrast theme.
 - Built-in math / conversion functions
 - Numbers, operators, punctuation
 
-A syntax **checker** (diagnostics) is not included yet.
+## Diagnostics
+
+Problems are reported in the editor and the Problems panel. The checker parses
+the script and validates the language rules, including:
+
+- declaration forms (`define var` with no initializer, `define list` element
+  types, top-level-only `type`/`function`, `member` only inside a type)
+- reserved keyword names, duplicate names, and no shadowing
+- `elseif` spelling, semicolons, `!=`, `+=`, `++`, `.5`, `1e3`, unsupported
+  loops (`while`/`for`) and `break`/`continue`/`return`
+- undeclared variables/params and use of parameters via the wrong keyword
+- list rules (read-only elements, no list literals, no `==` on lists, no list
+  members, `contains` only on lists)
+- type checking for arithmetic, comparisons, logic, assignments, built-in
+  functions, and user function arguments
+- structural rules (`on_tick` once, functions before `on_tick`, no top-level
+  `call`/`repeat`, no recursion, no forward calls)
+- comments longer than 31 characters (warning)
+
+Databus `in`/`out` names and types come from the game, so they are not checked.

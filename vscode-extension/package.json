@@ -1,8 +1,8 @@
 {
   "name": "anymaker-scripting",
   "displayName": "AnyMaker Scripting",
-  "description": "Syntax highlighting and scope-aware coloring for AnyMaker .amc scripts",
-  "version": "0.3.0",
+  "description": "Syntax highlighting, scope-aware coloring, and diagnostics for AnyMaker .amc scripts",
+  "version": "0.4.0",
   "publisher": "local",
   "main": "./extension.js",
   "extensionKind": [

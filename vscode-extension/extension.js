@@ -2,11 +2,13 @@
 
 const vscode = require('vscode');
 const { analyze } = require('./analyzer');
+const { check } = require('./checker');
 
 let globalType;
 let paramType;
 let inType;
 let outType;
+let diagnostics;
 const timers = new Map();
 
 function palette() {
@@ -53,6 +55,38 @@ function updateEditor(editor) {
   editor.setDecorations(outType, toRanges(editor.document, result.outVars));
 }
 
+function refreshDiagnostics(document) {
+  if (!diagnostics) return;
+  if (document.languageId !== 'anymaker') {
+    diagnostics.delete(document.uri);
+    return;
+  }
+  let result;
+  try {
+    result = check(document.getText());
+  } catch (error) {
+    return;
+  }
+  const items = result.map((item) => {
+    const range = new vscode.Range(document.positionAt(item.start), document.positionAt(item.end));
+    const severity =
+      item.severity === 'warning'
+        ? vscode.DiagnosticSeverity.Warning
+        : vscode.DiagnosticSeverity.Error;
+    const diagnostic = new vscode.Diagnostic(range, item.message, severity);
+    diagnostic.source = 'anymaker';
+    return diagnostic;
+  });
+  diagnostics.set(document.uri, items);
+}
+
+function refresh(document) {
+  refreshDiagnostics(document);
+  for (const editor of vscode.window.visibleTextEditors) {
+    if (editor.document === document) updateEditor(editor);
+  }
+}
+
 function updateVisible() {
   for (const editor of vscode.window.visibleTextEditors) updateEditor(editor);
 }
@@ -65,24 +99,23 @@ function schedule(document) {
     key,
     setTimeout(() => {
       timers.delete(key);
-      for (const editor of vscode.window.visibleTextEditors) {
-        if (editor.document === document) updateEditor(editor);
-      }
+      refresh(document);
     }, 100)
   );
 }
 
 function activate(context) {
+  diagnostics = vscode.languages.createDiagnosticCollection('anymaker');
+  context.subscriptions.push(diagnostics);
+
   rebuildTypes();
+  for (const document of vscode.workspace.textDocuments) refreshDiagnostics(document);
   updateVisible();
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeTextDocument((event) => schedule(event.document)),
-    vscode.workspace.onDidOpenTextDocument((document) => {
-      for (const editor of vscode.window.visibleTextEditors) {
-        if (editor.document === document) updateEditor(editor);
-      }
-    }),
+    vscode.workspace.onDidOpenTextDocument((document) => refresh(document)),
+    vscode.workspace.onDidCloseTextDocument((document) => diagnostics.delete(document.uri)),
     vscode.window.onDidChangeVisibleTextEditors(() => updateVisible()),
     vscode.window.onDidChangeActiveTextEditor((editor) => updateEditor(editor)),
     vscode.window.onDidChangeActiveColorTheme(() => {
