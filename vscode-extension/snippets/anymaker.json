@@ -1,0 +1,93 @@
+{
+  "AnyMaker: define var": {
+    "prefix": "dvar",
+    "body": ["define var ${1|bool,integer,fractional,string,analogue|} ${2:name}"],
+    "description": "Declare a variable (no initializer)"
+  },
+  "AnyMaker: define list": {
+    "prefix": "dlist",
+    "body": ["define list ${1|bool,integer,fractional|} ${2:name}"],
+    "description": "Declare a list"
+  },
+  "AnyMaker: define type": {
+    "prefix": "dtype",
+    "body": [
+      "define type ${1:TypeName}",
+      "{",
+      "\tdefine member ${2|bool,integer,fractional,string,analogue|} ${3:memberName}",
+      "}"
+    ],
+    "description": "Declare a custom type"
+  },
+  "AnyMaker: define member": {
+    "prefix": "dmember",
+    "body": ["define member ${1|bool,integer,fractional,string,analogue|} ${2:memberName}"],
+    "description": "Declare a type member"
+  },
+  "AnyMaker: define function": {
+    "prefix": "dfunc",
+    "body": [
+      "define function ${1:name} (${2:integer} ${3:value})",
+      "{",
+      "\t$0",
+      "}"
+    ],
+    "description": "Define a function"
+  },
+  "AnyMaker: on_tick": {
+    "prefix": "ontick",
+    "body": ["on_tick", "{", "\t$0", "}"],
+    "description": "Add the on_tick entrypoint"
+  },
+  "AnyMaker: if": {
+    "prefix": "if",
+    "body": ["if (${1:condition})", "{", "\t$0", "}"],
+    "description": "If block"
+  },
+  "AnyMaker: if / elseif / else": {
+    "prefix": "ifelse",
+    "body": [
+      "if (${1:condition})",
+      "{",
+      "\t$0",
+      "}",
+      "elseif (${2:condition})",
+      "{",
+      "}",
+      "else",
+      "{",
+      "}"
+    ],
+    "description": "If / elseif / else chain"
+  },
+  "AnyMaker: repeat": {
+    "prefix": "repeat",
+    "body": ["repeat (${1:count})", "{", "\t$0", "}"],
+    "description": "Repeat loop"
+  },
+  "AnyMaker: call": {
+    "prefix": "call",
+    "body": ["call ${1:function} (${0})"],
+    "description": "Call a function"
+  },
+  "AnyMaker: var assignment": {
+    "prefix": "varassign",
+    "body": ["var ${1:name} = ${0:value}"],
+    "description": "Assign a variable"
+  },
+  "AnyMaker: param assignment": {
+    "prefix": "paramassign",
+    "body": ["param ${1:name} = ${0:value}"],
+    "description": "Assign an output parameter"
+  },
+  "AnyMaker: in databus": {
+    "prefix": "inassign",
+    "body": ["in ${1:Path.name} = ${0:value}"],
+    "description": "Write a databus input"
+  },
+  "AnyMaker: out databus": {
+    "prefix": "outexpr",
+    "body": ["out ${1:Path.name}"],
+    "description": "Read a databus output"
+  }
+}

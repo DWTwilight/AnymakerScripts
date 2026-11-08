@@ -95,13 +95,17 @@ class Checker {
     return { start: 0, end: 0 };
   }
 
-  reportAt(token, message, severity = 'error') {
+  reportAt(token, message, severity = 'error', extra) {
     const t = token || this.lastToken();
-    this.diagnostics.push({ start: t.start, end: t.end, message, severity });
+    const diagnostic = { start: t.start, end: t.end, message, severity };
+    if (extra) Object.assign(diagnostic, extra);
+    this.diagnostics.push(diagnostic);
   }
 
-  reportOffset(start, end, message, severity = 'error') {
-    this.diagnostics.push({ start, end, message, severity });
+  reportOffset(start, end, message, severity = 'error', extra) {
+    const diagnostic = { start, end, message, severity };
+    if (extra) Object.assign(diagnostic, extra);
+    this.diagnostics.push(diagnostic);
   }
 
   checkComments() {
@@ -127,10 +131,16 @@ class Checker {
       } else if (['+=', '-=', '*=', '/=', '%=', '++', '--'].includes(v)) {
         this.reportAt(t, `operator '${v}' is not supported`);
       } else if (v === ';') {
-        this.reportAt(t, 'semicolons / multiple statements per line are not supported');
+        this.reportAt(t, 'semicolons / multiple statements per line are not supported', 'error', {
+          code: 'semicolon',
+          fix: { title: 'Remove semicolon', edits: [{ start: t.start, end: t.end, newText: '' }] },
+        });
       } else if (t.type === 'number') {
         if (v.startsWith('.')) {
-          this.reportAt(t, 'fractional literals need a digit before the dot (write 0.5)');
+          this.reportAt(t, 'fractional literals need a digit before the dot (write 0.5)', 'error', {
+            code: 'leading-dot',
+            fix: { title: "Insert leading '0'", edits: [{ start: t.start, end: t.start, newText: '0' }] },
+          });
         }
         if (/[eE]/.test(v)) {
           this.reportAt(t, 'exponent notation is not supported');
@@ -361,7 +371,14 @@ class Checker {
 
   checkStructure() {
     if (this.onTickTokens.length === 0) {
-      this.reportOffset(0, 0, "no 'on_tick' entrypoint defined", 'warning');
+      const prefix = this.text.endsWith('\n') ? '\n' : '\n\n';
+      this.reportOffset(0, 0, "no 'on_tick' entrypoint defined", 'warning', {
+        code: 'no-on-tick',
+        fix: {
+          title: "Add empty 'on_tick' block",
+          edits: [{ start: this.text.length, end: this.text.length, newText: `${prefix}on_tick\n{\n}\n` }],
+        },
+      });
       return;
     }
     for (let i = 1; i < this.onTickTokens.length; i++) {
@@ -558,9 +575,16 @@ class Checker {
     }
 
     if (this.check('=')) {
-      this.reportAt(this.peek(), `'define ${kindTok.value}' takes no initializer`);
-      this.next();
+      const equalsTok = this.next();
       this.parseExpr();
+      const last = this.codeTokens[this.pos - 1] || equalsTok;
+      this.reportAt(equalsTok, `'define ${kindTok.value}' takes no initializer`, 'error', {
+        code: 'no-initializer',
+        fix: {
+          title: 'Remove initializer',
+          edits: [{ start: equalsTok.start, end: last.end, newText: '' }],
+        },
+      });
     }
   }
 
@@ -869,9 +893,16 @@ class Checker {
       this.parseBlockBody(true);
     }
     if (this.check('else')) {
-      this.next();
+      const elseTok = this.next();
       if (this.check('if')) {
-        this.reportAt(this.peek(), "use 'elseif', not 'else if'");
+        const ifTok = this.peek();
+        this.reportAt(ifTok, "use 'elseif', not 'else if'", 'error', {
+          code: 'else-if',
+          fix: {
+            title: "Replace with 'elseif'",
+            edits: [{ start: elseTok.start, end: ifTok.end, newText: 'elseif' }],
+          },
+        });
         const tok = this.next();
         this.parseCondition(tok, 'if');
         this.parseBlockBody(true);
@@ -1050,7 +1081,10 @@ class Checker {
       const nextTok = this.peek();
       if (nextTok && nextTok.value === '(') {
         if (op.end === nextTok.start) {
-          this.reportAt(op, "add a space between '!' and '('", 'warning');
+          this.reportAt(op, "add a space between '!' and '('", 'warning', {
+            code: 'bang-spacing',
+            fix: { title: 'Insert space', edits: [{ start: op.end, end: op.end, newText: ' ' }] },
+          });
         }
         this.next();
         const type = this.parseOr();
@@ -1284,7 +1318,10 @@ class Checker {
     }
     this.next();
     if (nameTok.end === open.start) {
-      this.reportAt(nameTok, `add a space before '(' for '${nameTok.value}'`, 'warning');
+      this.reportAt(nameTok, `add a space before '(' for '${nameTok.value}'`, 'warning', {
+        code: 'call-spacing',
+        fix: { title: 'Insert space', edits: [{ start: open.start, end: open.start, newText: ' ' }] },
+      });
     }
     const args = [];
     const argTokens = [];

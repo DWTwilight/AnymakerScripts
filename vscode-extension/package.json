@@ -1,8 +1,8 @@
 {
   "name": "anymaker-scripting",
   "displayName": "AnyMaker Scripting",
-  "description": "Syntax highlighting, scope-aware coloring, and diagnostics for AnyMaker .amc scripts",
-  "version": "0.4.0",
+  "description": "Syntax highlighting, scope-aware coloring, diagnostics, snippets, and outline for AnyMaker .amc scripts",
+  "version": "0.5.0",
   "publisher": "local",
   "main": "./extension.js",
   "extensionKind": [
@@ -40,6 +40,12 @@
         "language": "anymaker",
         "scopeName": "source.amc",
         "path": "./syntaxes/anymaker.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "anymaker",
+        "path": "./snippets/anymaker.json"
       }
     ]
   }

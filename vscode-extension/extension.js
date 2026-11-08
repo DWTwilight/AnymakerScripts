@@ -3,6 +3,16 @@
 const vscode = require('vscode');
 const { analyze } = require('./analyzer');
 const { check } = require('./checker');
+const { documentSymbols } = require('./symbols');
+
+const SYMBOL_KINDS = {
+  function: vscode.SymbolKind.Function,
+  type: vscode.SymbolKind.Struct,
+  variable: vscode.SymbolKind.Variable,
+  event: vscode.SymbolKind.Event,
+  param: vscode.SymbolKind.Variable,
+  member: vscode.SymbolKind.Field,
+};
 
 let globalType;
 let paramType;
@@ -10,6 +20,7 @@ let inType;
 let outType;
 let diagnostics;
 const timers = new Map();
+const checked = new Map();
 
 function palette() {
   const kind = vscode.window.activeColorTheme.kind;
@@ -57,8 +68,10 @@ function updateEditor(editor) {
 
 function refreshDiagnostics(document) {
   if (!diagnostics) return;
+  const key = document.uri.toString();
   if (document.languageId !== 'anymaker') {
     diagnostics.delete(document.uri);
+    checked.delete(key);
     return;
   }
   let result;
@@ -67,6 +80,7 @@ function refreshDiagnostics(document) {
   } catch (error) {
     return;
   }
+  checked.set(key, result);
   const items = result.map((item) => {
     const range = new vscode.Range(document.positionAt(item.start), document.positionAt(item.end));
     const severity =
@@ -85,6 +99,51 @@ function refresh(document) {
   for (const editor of vscode.window.visibleTextEditors) {
     if (editor.document === document) updateEditor(editor);
   }
+}
+
+function toDocumentSymbol(document, symbol) {
+  const range = new vscode.Range(document.positionAt(symbol.start), document.positionAt(symbol.end));
+  const selection = new vscode.Range(
+    document.positionAt(symbol.selectionStart),
+    document.positionAt(symbol.selectionEnd)
+  );
+  const result = new vscode.DocumentSymbol(
+    symbol.name,
+    symbol.detail || '',
+    SYMBOL_KINDS[symbol.kind] || vscode.SymbolKind.Variable,
+    range,
+    selection
+  );
+  if (symbol.children && symbol.children.length) {
+    result.children = symbol.children.map((child) => toDocumentSymbol(document, child));
+  }
+  return result;
+}
+
+function provideCodeActions(document, range, context) {
+  const items = checked.get(document.uri.toString());
+  if (!items) return [];
+  const actions = [];
+  for (const diagnostic of context.diagnostics) {
+    if (diagnostic.source !== 'anymaker') continue;
+    const offset = document.offsetAt(diagnostic.range.start);
+    const item = items.find((candidate) => candidate.start === offset && candidate.message === diagnostic.message);
+    if (!item || !item.fix) continue;
+    const action = new vscode.CodeAction(item.fix.title, vscode.CodeActionKind.QuickFix);
+    action.diagnostics = [diagnostic];
+    action.isPreferred = true;
+    const edit = new vscode.WorkspaceEdit();
+    for (const change of item.fix.edits) {
+      edit.replace(
+        document.uri,
+        new vscode.Range(document.positionAt(change.start), document.positionAt(change.end)),
+        change.newText
+      );
+    }
+    action.edit = edit;
+    actions.push(action);
+  }
+  return actions;
 }
 
 function updateVisible() {
@@ -115,7 +174,24 @@ function activate(context) {
   context.subscriptions.push(
     vscode.workspace.onDidChangeTextDocument((event) => schedule(event.document)),
     vscode.workspace.onDidOpenTextDocument((document) => refresh(document)),
-    vscode.workspace.onDidCloseTextDocument((document) => diagnostics.delete(document.uri)),
+    vscode.workspace.onDidCloseTextDocument((document) => {
+      diagnostics.delete(document.uri);
+      checked.delete(document.uri.toString());
+    }),
+    vscode.languages.registerCodeActionsProvider(
+      'anymaker',
+      { provideCodeActions },
+      { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] }
+    ),
+    vscode.languages.registerDocumentSymbolProvider('anymaker', {
+      provideDocumentSymbols(document) {
+        try {
+          return documentSymbols(document.getText()).map((symbol) => toDocumentSymbol(document, symbol));
+        } catch (error) {
+          return [];
+        }
+      },
+    }),
     vscode.window.onDidChangeVisibleTextEditors(() => updateVisible()),
     vscode.window.onDidChangeActiveTextEditor((editor) => updateEditor(editor)),
     vscode.window.onDidChangeActiveColorTheme(() => {

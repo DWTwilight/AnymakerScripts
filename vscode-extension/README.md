@@ -20,13 +20,13 @@ actually hosts the folder:
 2. Install into Windows VS Code (local folder):
 
    ```sh
-   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.4.0.vsix")" --force
+   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.5.0.vsix")" --force
    ```
 
    Or, inside a Remote-WSL window, use the integrated terminal:
 
    ```sh
-   code --install-extension "$PWD/anymaker-scripting-0.4.0.vsix" --force
+   code --install-extension "$PWD/anymaker-scripting-0.5.0.vsix" --force
    ```
 
 3. Reload VS Code.
@@ -78,3 +78,27 @@ the script and validates the language rules, including:
 - comments longer than 31 characters (warning)
 
 Databus `in`/`out` names and types come from the game, so they are not checked.
+
+## Quick fixes
+
+Fixes offered from the lightbulb / `Ctrl+.`:
+
+- `else if` -> `elseif`
+- remove a semicolon
+- insert a leading `0` for `.5`
+- remove a `define var` initializer
+- add an empty `on_tick` block
+- insert spacing for `!(` and `abs(` style calls
+
+## Snippets
+
+Type a prefix and press `Tab`:
+
+`dvar`, `dlist`, `dtype`, `dmember`, `dfunc`, `ontick`, `if`, `ifelse`,
+`repeat`, `call`, `varassign`, `paramassign`, `inassign`, `outexpr`.
+
+## Outline
+
+The Outline view and breadcrumbs list top-level variables, functions, custom
+types (with their members), and the `on_tick` entrypoint. Function parameters
+appear as children of their function.
