@@ -1,3 +1,37 @@
+# Constants
+
+# idle engine speed (rps)
+define var fractional IDLE_RPS
+var IDLE_RPS = 13.5
+
+# starter cutoff speed (rps)
+define var fractional STARTER_CUTOFF_RPS
+var STARTER_CUTOFF_RPS = 6.5
+
+# min idle throttle
+define var fractional MIN_IDLE_THROTTLE
+var MIN_IDLE_THROTTLE = 0.05
+
+# wheel base (m)
+define var fractional WHEEL_BASE
+var WHEEL_BASE = 2.72
+
+# track width (m)
+define var fractional TRACK_WIDTH
+var TRACK_WIDTH = 1.52
+
+# max virtual steer angle (rad)
+define var fractional MAX_VIRTUAL_STEER_ANG
+var MAX_VIRTUAL_STEER_ANG = 0.5236
+
+# steer dead zone
+define var fractional STEER_DEAD_ZONE
+var STEER_DEAD_ZONE = 0.001
+
+# derive inner angle at load
+define var fractional MAX_INNER_STEER_ANGLE
+var MAX_INNER_STEER_ANGLE = atan (var WHEEL_BASE / (var WHEEL_BASE / tan (var MAX_VIRTUAL_STEER_ANG) - var TRACK_WIDTH * 0.5))
+
 # Shared Globals
 
 # power & lights state
@@ -37,14 +71,14 @@ define function clamp (fractional inputValue, fractional minValue, fractional ma
 	}
 }
 
-# power & lights state
-define var bool lastStartPressed
-var lastStartPressed = false
+# Btn_Start_Stop Press flag
+define var bool btnStartStopPressFlag
+var btnStartStopPressFlag = false
 
 # power state machine
 define function power_on_tick ()
 {
-	if (out Btn_Start_Stop.is_pressed && ! (var lastStartPressed))
+	if (out Btn_Start_Stop.is_pressed && ! (var btnStartStopPressFlag))
 	{
 		if (var powerState == 0)
 		{
@@ -73,7 +107,7 @@ define function power_on_tick ()
 			var powerState = 0
 		}
 	}
-	var lastStartPressed = out Btn_Start_Stop.is_pressed
+	var btnStartStopPressFlag = out Btn_Start_Stop.is_pressed
 
 	define var bool mainOn
 	var mainOn = var powerState > 0
@@ -90,14 +124,6 @@ define function power_on_tick ()
 	in Dial_Speed.is_illuminated = var mainOn
 	in Display_Gear.is_illuminated = var mainOn
 }
-
-# engine constants
-define var fractional IDLE_RPS
-define var fractional STARTER_CUTOFF_RPS
-define var fractional MIN_IDLE_THROTTLE
-var IDLE_RPS = 13.5
-var STARTER_CUTOFF_RPS = 6.5
-var MIN_IDLE_THROTTLE = 0.05
 
 # engine logic
 define function engine_on_tick ()
@@ -127,19 +153,6 @@ define function engine_on_tick ()
 	in ASM_Power_Starter.input = var starterValue
 	in ASM_Throttle.input = var throttleValue
 }
-
-# steering constants
-define var fractional WHEEL_BASE
-define var fractional TRACK_WIDTH
-define var fractional MAX_VIRTUAL_STEER_ANG
-define var fractional MAX_INNER_STEER_ANGLE
-define var fractional STEER_DEAD_ZONE
-var WHEEL_BASE = 2.72
-var TRACK_WIDTH = 1.52
-var MAX_VIRTUAL_STEER_ANG = 0.5236
-var STEER_DEAD_ZONE = 0.001
-# derive inner angle at load
-var MAX_INNER_STEER_ANGLE = atan (var WHEEL_BASE / (var WHEEL_BASE / tan (var MAX_VIRTUAL_STEER_ANG) - var TRACK_WIDTH * 0.5))
 
 # ackermann steering logic
 define function steering_on_tick ()

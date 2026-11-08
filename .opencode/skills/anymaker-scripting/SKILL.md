@@ -16,6 +16,33 @@ see [Practical examples](#practical-examples).
   range). Guard the input first.
 - **Do not code around unlikely cases.** Handle them when they actually arise.
 
+## Script organization
+
+Lay files out top to bottom in this order:
+
+1. **Constants** under a `# Constants` header. Declare global tuning values
+   here — initialized once and never reassigned. For each one use the fixed
+   triple — comment, `define var`, assignment:
+
+   ```
+   # idle engine speed (rps)
+   define var fractional IDLE_RPS
+   var IDLE_RPS = 13.5
+   ```
+
+   Keep derived constants after the values they use.
+2. **Shared Globals** under a `# Shared Globals` header. Declare mutable state
+   shared between functions here, using the same comment/`define var`/assignment
+   triple.
+3. **Helper functions** — small reusable utilities (e.g. `bool_to_fraction`,
+   `clamp`).
+4. **Logic functions** — one per subsystem, named `<subsystem>_on_tick`, each
+   preceded by a short comment.
+5. **`on_tick`** last, calling each logic function in order.
+
+Keep global declarations out of the middle of the file; a value shared between
+functions belongs at the top, constants first and mutable state after.
+
 ## Comments
 
 A comment is a `#` line, limited to **31 characters**:
@@ -312,13 +339,20 @@ on_tick
   repeating the work every tick:
 
 ```
+# wheel base (m)
 define var fractional WHEEL_BASE
-define var fractional TRACK_WIDTH
-define var fractional MAX_VIRTUAL_STEER_ANG
-define var fractional MAX_INNER_STEER_ANGLE
 var WHEEL_BASE = 2.72
+
+# track width (m)
+define var fractional TRACK_WIDTH
 var TRACK_WIDTH = 1.52
+
+# max virtual steer angle (rad)
+define var fractional MAX_VIRTUAL_STEER_ANG
 var MAX_VIRTUAL_STEER_ANG = 0.5236
+
+# derive inner angle at load
+define var fractional MAX_INNER_STEER_ANGLE
 var MAX_INNER_STEER_ANGLE = atan (var WHEEL_BASE / (var WHEEL_BASE / tan (var MAX_VIRTUAL_STEER_ANG) - var TRACK_WIDTH * 0.5))
 ```
 
