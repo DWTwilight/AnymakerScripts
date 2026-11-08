@@ -20,13 +20,13 @@ actually hosts the folder:
 2. Install into Windows VS Code (local folder):
 
    ```sh
-   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.8.0.vsix")" --force
+   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.9.0.vsix")" --force
    ```
 
    Or, inside a Remote-WSL window, use the integrated terminal:
 
    ```sh
-   code --install-extension "$PWD/anymaker-scripting-0.8.0.vsix" --force
+   code --install-extension "$PWD/anymaker-scripting-0.9.0.vsix" --force
    ```
 
 3. Reload VS Code.
@@ -126,6 +126,8 @@ signature and a short description.
   inputValue, ...)`.
 - Custom types show their member block.
 - Built-ins show typed signatures such as `atan (x: fractional) -> fractional`.
+- Consecutive `#` comment lines immediately above a declaration (no blank line
+  between) are shown as its documentation in the hover.
 
 ## IntelliSense
 

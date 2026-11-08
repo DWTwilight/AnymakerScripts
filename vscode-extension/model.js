@@ -179,7 +179,7 @@ function buildModel(text) {
                     type: mtype.value,
                     nameStart: mname.start,
                     nameEnd: mname.end,
-                    start: mname.start,
+                    start: tokens[k].start,
                     end: mname.end,
                     scope: rootScope,
                   };

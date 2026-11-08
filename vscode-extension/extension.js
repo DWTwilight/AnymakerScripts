@@ -154,6 +154,18 @@ function symbolHover(decl) {
   }
 }
 
+function commentAbove(document, decl) {
+  if (!decl || decl.kind === 'param') return [];
+  const startLine = document.positionAt(decl.start).line;
+  const comments = [];
+  for (let line = startLine - 1; line >= 0; line--) {
+    const text = document.lineAt(line).text;
+    if (!/^\s*#/.test(text)) break;
+    comments.unshift(text.replace(/^\s*#\s?/, ''));
+  }
+  return comments;
+}
+
 function provideHover(document, position) {
   const range = document.getWordRangeAtPosition(position, /[A-Za-z_][A-Za-z0-9_]*/);
   if (!range) return null;
@@ -170,6 +182,11 @@ function provideHover(document, position) {
     const label = view.type ? `**${view.label}** · \`${view.type}\`` : `**${view.label}**`;
     markdown.appendMarkdown(`${label}\n\n`);
     markdown.appendCodeblock(view.code, 'anymaker');
+    const comments = commentAbove(document, decl);
+    for (const comment of comments) {
+      markdown.appendMarkdown('\n\n');
+      markdown.appendText(comment);
+    }
   }
   if (info) {
     if (decl) markdown.appendMarkdown('\n---\n');
