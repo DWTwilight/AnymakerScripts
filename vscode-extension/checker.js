@@ -1443,4 +1443,4 @@ function check(text) {
   return new Checker(text).run();
 }
 
-module.exports = { check, tokenize };
+module.exports = { check, tokenize, RESERVED };

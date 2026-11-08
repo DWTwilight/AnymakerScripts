@@ -50,8 +50,40 @@ const TYPES = new Map([
   ['analogue', { signature: 'analogue', description: 'Stream-like scalar. Semantics and null handling are outside the current scope.' }],
 ]);
 
+const BUILTIN_PARAMS = new Map([
+  ['abs', ['x']],
+  ['floor', ['x']],
+  ['ceil', ['x']],
+  ['round', ['x']],
+  ['sqrt', ['x']],
+  ['exp', ['x']],
+  ['ln', ['x']],
+  ['log2', ['x']],
+  ['sin', ['x']],
+  ['cos', ['x']],
+  ['tan', ['x']],
+  ['asin', ['x']],
+  ['acos', ['x']],
+  ['atan', ['x']],
+  ['rand', ['a', 'b']],
+  ['len', ['x']],
+  ['to_integer', ['x']],
+  ['to_fractional', ['x']],
+]);
+
 function lookupHover(word) {
   return BUILTINS.get(word) || KEYWORDS.get(word) || TYPES.get(word) || null;
 }
 
-module.exports = { lookupHover };
+function builtinSignature(word) {
+  const info = BUILTINS.get(word);
+  if (!info) return null;
+  const params = BUILTIN_PARAMS.get(word) || [];
+  return {
+    label: info.signature,
+    documentation: info.description,
+    parameters: params.map((name) => ({ label: name, documentation: '' })),
+  };
+}
+
+module.exports = { lookupHover, builtinSignature, BUILTINS };

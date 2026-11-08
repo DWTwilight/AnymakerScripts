@@ -6,6 +6,7 @@ const { check } = require('./checker');
 const { documentSymbols } = require('./symbols');
 const { foldingRanges } = require('./folding');
 const { lookupHover } = require('./hover');
+const { registerIntellisense } = require('./intellisense');
 
 const SYMBOL_KINDS = {
   function: vscode.SymbolKind.Function,
@@ -235,6 +236,7 @@ function schedule(document) {
 function activate(context) {
   diagnostics = vscode.languages.createDiagnosticCollection('anymaker');
   context.subscriptions.push(diagnostics);
+  context.subscriptions.push(...registerIntellisense());
 
   rebuildTypes();
   for (const document of vscode.workspace.textDocuments) refreshDiagnostics(document);

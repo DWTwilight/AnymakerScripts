@@ -20,13 +20,13 @@ actually hosts the folder:
 2. Install into Windows VS Code (local folder):
 
    ```sh
-   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.6.0.vsix")" --force
+   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.7.0.vsix")" --force
    ```
 
    Or, inside a Remote-WSL window, use the integrated terminal:
 
    ```sh
-   code --install-extension "$PWD/anymaker-scripting-0.6.0.vsix" --force
+   code --install-extension "$PWD/anymaker-scripting-0.7.0.vsix" --force
    ```
 
 3. Reload VS Code.
@@ -120,3 +120,19 @@ spaces) are respected.
 Hover a built-in, type, keyword, or declared symbol to see its signature and a
 short description. Declared globals, functions, types, members, and parameters
 show their declaration form.
+
+## IntelliSense
+
+- **Completion**: keywords and declaration kinds after `define`; valid types in
+  type positions (including function signatures); variables after `var`;
+  parameters after `param`; functions after `call`; members after `.`; and a
+  general list of builtins, types, and in-scope symbols elsewhere.
+- **Signature help**: parameter hints for `call f (` and for builtins such as
+  `rand (`, `atan (`, and `to_integer (`. Tracks the active parameter across
+  commas.
+- **Go to definition / Find references**: works for globals, locals,
+  parameters, functions, custom types, and members. Databus `in`/`out` paths are
+  excluded.
+- **Rename**: scope-correctly renames a symbol's declaration and all its
+  references. Rejects reserved keywords, duplicates, invalid names, and
+  `on_tick`.
