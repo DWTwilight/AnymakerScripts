@@ -79,7 +79,7 @@ Latch is open if handle is active and not locked
 - ASM_Power_Main.input
   - Fractional
   - Main Power Relay(1 -> on)
-- ASM_Power_Engine.input.input
+- ASM_Power_Engine.input
   - Fractional
   - Engine Power Relay(1 -> on)
 

@@ -1,0 +1,118 @@
+{
+    "in": {
+        "ASM_FL_Door_Latch.input": {
+            "type": "fractional",
+            "description": "0.0 means closed, 1.0 means open"
+        },
+        "ASM_FR_Door_Latch.input": {
+            "type": "fractional",
+            "description": "0.0 means closed, 1.0 means open"
+        },
+        "ASM_RL_Door_Latch.input": {
+            "type": "fractional",
+            "description": "0.0 means closed, 1.0 means open"
+        },
+        "ASM_RR_Door_Latch.input": {
+            "type": "fractional",
+            "description": "0.0 means closed, 1.0 means open"
+        },
+        "ASM_Trunk_Latch.input": {
+            "type": "fractional",
+            "description": "0.0 means closed, 1.0 means open"
+        },
+        "ASM_Hood_Latch.input": {
+            "type": "fractional",
+            "description": "0.0 means closed, 1.0 means open"
+        },
+        "Btn_Start_Stop.is_illuminated": {
+            "type": "bool",
+            "description": "Backlight on/off"
+        },
+        "Dial_RPM.is_illuminated": {
+            "type": "bool",
+            "description": "Backlight on/off"
+        },
+        "Dial_Speed.is_illuminated": {
+            "type": "bool",
+            "description": "Backlight on/off"
+        },
+        "Display_Gear.is_illuminated": {
+            "type": "bool",
+            "description": "Backlight on/off"
+        },
+        "ASM_Power_Main.input": {
+            "type": "fractional",
+            "description": "Main Power Relay (1 -> on)"
+        },
+        "ASM_Power_Engine.input": {
+            "type": "fractional",
+            "description": "Engine Power Relay (1 -> on)"
+        },
+        "ASM_Power_Starter.input": {
+            "type": "fractional",
+            "description": "Engine Starter Power Relay (1 -> on)"
+        },
+        "ASM_Throttle.input": {
+            "type": "fractional",
+            "description": "Actual engine throttle input, 0 (no throttle) -> 1 (full throttle)"
+        },
+        "ASM_Steering_Left.input": {
+            "type": "fractional",
+            "description": "Steering left input (-1 to 1), 1 is turning left"
+        },
+        "ASM_Steering_Right.input": {
+            "type": "fractional",
+            "description": "Steering right input (-1 to 1), 1 is turning right"
+        }
+    },
+    "out": {
+        "FL_Door_Handle.is_active": {
+            "type": "bool",
+            "description": "true means the front-left door handle is opened"
+        },
+        "FR_Door_Handle.is_active": {
+            "type": "bool",
+            "description": "true means the front-right door handle is opened"
+        },
+        "RL_Door_Handle.is_active": {
+            "type": "bool",
+            "description": "true means the rear-left door handle is opened"
+        },
+        "RR_Door_Handle.is_active": {
+            "type": "bool",
+            "description": "true means the rear-right door handle is opened"
+        },
+        "Trunk_Handle.is_active": {
+            "type": "bool",
+            "description": "true means the trunk handle is opened"
+        },
+        "Hood_Handle.is_active": {
+            "type": "bool",
+            "description": "true means the hood handle is opened"
+        },
+        "Door_Lock.is_pressed": {
+            "type": "bool",
+            "description": "true means the door lock is pressed"
+        },
+        "Btn_Start_Stop.is_pressed": {
+            "type": "bool",
+            "description": "Whether the Start/Stop button is pressed"
+        },
+        "Steering_Wheel.left_pedal": {
+            "type": "fractional",
+            "description": "Brake input, 0 (no brake) -> 1 (full brake)"
+        },
+        "Engine.rps": {
+            "type": "fractional",
+            "description": "The engine starts at 6 rps (360 RPM)"
+        },
+        "Steering_Wheel.right_pedal": {
+            "type": "fractional",
+            "description": "Throttle input, 0 (no throttle) -> 1 (full throttle)"
+        },
+        "Steering_Wheel.steering": {
+            "type": "fractional",
+            "description": "Steering input, -1 (full left) -> 1 (full right)"
+        }
+    }
+}

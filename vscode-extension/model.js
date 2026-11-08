@@ -243,13 +243,20 @@ function buildModel(text) {
     if (token.value === 'in' || token.value === 'out') {
       const first = tokens[i + 1];
       if (first && first.type === 'ident') {
+        let path = first.value;
         let last = first;
         let k = i + 2;
         while (tokens[k] && tokens[k].value === '.' && tokens[k + 1] && tokens[k + 1].type === 'ident') {
+          path += '.' + tokens[k + 1].value;
           last = tokens[k + 1];
           k += 2;
         }
-        databus.push({ start: first.start, end: last.end });
+        databus.push({
+          direction: token.value,
+          path,
+          start: first.start,
+          end: last.end,
+        });
         i = k;
         continue;
       }
@@ -324,7 +331,7 @@ function clearModel(uri) {
   cache.delete(uri.toString());
 }
 
-function isExcluded(model, offset) {
+function isInCommentOrString(model, offset) {
   for (const token of model.allTokens) {
     if (
       (token.type === 'comment' || token.type === 'string') &&
@@ -334,10 +341,72 @@ function isExcluded(model, offset) {
       return true;
     }
   }
+  return false;
+}
+
+function isInDatabus(model, offset) {
   for (const path of model.databus) {
     if (path.start <= offset && offset < path.end) return true;
   }
   return false;
 }
 
-module.exports = { buildModel, getModel, clearModel, isExcluded, BUILTIN_TYPES };
+function isExcluded(model, offset) {
+  return isInCommentOrString(model, offset) || isInDatabus(model, offset);
+}
+
+const DATABUS_STOP_WORDS = new Set([
+  'var', 'param', 'call', 'define', 'if', 'elseif', 'else', 'repeat',
+  'on_tick', 'function', 'type', 'member', 'list', 'in', 'out',
+]);
+
+function databusContextAt(model, offset) {
+  for (const entry of model.databus) {
+    if (entry.start <= offset && offset <= entry.end) {
+      return {
+        direction: entry.direction,
+        path: entry.path,
+        start: entry.start,
+        end: entry.end,
+        inPath: true,
+      };
+    }
+  }
+
+  const tokens = model.tokens;
+  let keywordIndex = -1;
+  let keyword = null;
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    const token = tokens[i];
+    if (token.start >= offset) continue;
+    if (token.value === 'in' || token.value === 'out') {
+      keywordIndex = i;
+      keyword = token;
+      break;
+    }
+  }
+  if (!keyword) return null;
+
+  let pathStart = -1;
+  for (let i = keywordIndex + 1; i < tokens.length && tokens[i].start < offset; i++) {
+    const token = tokens[i];
+    if (token.type === 'ident' && DATABUS_STOP_WORDS.has(token.value)) return null;
+    if (token.type === 'ident' || token.value === '.') {
+      if (pathStart < 0) pathStart = token.start;
+    } else {
+      return null;
+    }
+  }
+  return { direction: keyword.value, start: pathStart >= 0 ? pathStart : offset, inPath: false };
+}
+
+module.exports = {
+  buildModel,
+  getModel,
+  clearModel,
+  isInCommentOrString,
+  isInDatabus,
+  isExcluded,
+  databusContextAt,
+  BUILTIN_TYPES,
+};

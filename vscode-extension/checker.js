@@ -50,12 +50,13 @@ function computeLineStarts(text) {
 }
 
 class Checker {
-  constructor(text) {
+  constructor(text, schema) {
     this.text = text;
     this.tokens = tokenize(text);
     this.codeTokens = this.tokens.filter((t) => t.type !== 'comment');
     this.lineStarts = computeLineStarts(text);
     this.diagnostics = [];
+    this.schema = schema || null;
 
     this.globals = new Map();
     this.functions = new Map();
@@ -818,21 +819,56 @@ class Checker {
 
   parseInStatement() {
     const inTok = this.next();
-    if (!this.isIdent(this.peek())) {
+    const first = this.peek();
+    if (!this.isIdent(first)) {
       this.reportAt(inTok, "expected databus path after 'in'");
       return;
     }
     this.next();
+    let path = first.value;
+    let last = first;
     while (this.check('.')) {
       this.next();
-      if (!this.isIdent(this.peek())) {
+      const segment = this.peek();
+      if (!this.isIdent(segment)) {
         this.reportAt(this.lastToken(), 'expected databus path segment');
         break;
       }
       this.next();
+      path += '.' + segment.value;
+      last = segment;
     }
-    if (this.match('=')) this.parseExpr();
-    else this.reportAt(inTok, "expected '=' after databus input path");
+
+    const known = this.schema ? this.validateDatabus('in', path, first, last) : null;
+    let rhs = null;
+    if (this.match('=')) {
+      rhs = this.parseExpr();
+    } else {
+      this.reportAt(inTok, "expected '=' after databus input path");
+    }
+    if (known && rhs) {
+      this.checkAssign(known, rhs, last, 'databus in');
+    }
+  }
+
+  validateDatabus(direction, path, first, last) {
+    if (!this.schema) return null;
+    const own = this.schema[direction] || {};
+    const otherDirection = direction === 'in' ? 'out' : 'in';
+    const other = this.schema[otherDirection] || {};
+    const token = { start: first.start, end: last.end };
+    if (path in own) {
+      return own[path] && own[path].type ? own[path].type : 'unknown';
+    }
+    if (path in other) {
+      this.reportAt(
+        token,
+        `databus path '${path}' is an '${otherDirection}' variable; use '${otherDirection} ${path}'`
+      );
+    } else {
+      this.reportAt(token, `unknown databus '${direction}' path '${path}'`);
+    }
+    return null;
   }
 
   parseCallStatement(topLevel) {
@@ -1293,20 +1329,29 @@ class Checker {
 
   parseOutPrimary() {
     const outTok = this.next();
-    if (!this.isIdent(this.peek())) {
+    const first = this.peek();
+    if (!this.isIdent(first)) {
       this.reportAt(outTok, "expected databus path after 'out'");
       return 'unknown';
     }
     this.next();
+    let path = first.value;
+    let last = first;
     while (this.check('.')) {
       this.next();
-      if (!this.isIdent(this.peek())) {
+      const segment = this.peek();
+      if (!this.isIdent(segment)) {
         this.reportAt(this.lastToken(), 'expected databus path segment');
         break;
       }
       this.next();
+      path += '.' + segment.value;
+      last = segment;
     }
-    return 'unknown';
+    if (!this.schema) return 'unknown';
+    const type = this.validateDatabus('out', path, first, last);
+    if (!type || type === 'analogue') return 'unknown';
+    return type;
   }
 
   parseBuiltinCall() {
@@ -1439,8 +1484,8 @@ class Checker {
   }
 }
 
-function check(text) {
-  return new Checker(text).run();
+function check(text, schema) {
+  return new Checker(text, schema).run();
 }
 
 module.exports = { check, tokenize, RESERVED };

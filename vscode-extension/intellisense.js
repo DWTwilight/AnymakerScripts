@@ -1,7 +1,14 @@
 'use strict';
 
 const vscode = require('vscode');
-const { getModel, clearModel, isExcluded } = require('./model');
+const {
+  getModel,
+  clearModel,
+  isExcluded,
+  isInCommentOrString,
+  databusContextAt,
+} = require('./model');
+const { loadSchema } = require('./databus');
 const { lookupHover, builtinSignature, BUILTINS } = require('./hover');
 const { RESERVED } = require('./checker');
 
@@ -229,12 +236,41 @@ function completionItems(model, offset, context) {
   return items;
 }
 
-function provideCompletionItems(document, position) {
+async function databusCompletions(document, position, context) {
+  const schema = await loadSchema(document);
+  if (!schema) return new vscode.CompletionList([], false);
+  const entries = schema[context.direction] || {};
+  const range = new vscode.Range(document.positionAt(context.start), position);
+  const items = [];
+  for (const [path, info] of Object.entries(entries)) {
+    const item = new vscode.CompletionItem(path, vscode.CompletionItemKind.Value);
+    if (info && info.type) item.detail = info.type;
+    if (info && info.description) item.documentation = new vscode.MarkdownString(info.description);
+    item.filterText = path;
+    item.insertText = path;
+    item.range = range;
+    items.push(item);
+  }
+  return new vscode.CompletionList(items, false);
+}
+
+async function provideCompletionItems(document, position) {
   const model = getModel(document);
   const offset = document.offsetAt(position);
-  if (isExcluded(model, offset)) return undefined;
+  if (isInCommentOrString(model, offset)) return undefined;
+
   const wordRange = document.getWordRangeAtPosition(position, WORD_RE);
   const anchor = wordRange ? document.offsetAt(wordRange.start) : offset;
+  const before = lastToken(model.tokens, anchor).token;
+
+  const databus = databusContextAt(model, offset);
+  if (databus) {
+    const wanted =
+      databus.inPath ||
+      (before && (before.value === 'in' || before.value === 'out' || before.value === '.'));
+    if (wanted) return databusCompletions(document, position, databus);
+  }
+
   const context = completionContext(model, anchor);
   return new vscode.CompletionList(completionItems(model, offset, context), false);
 }

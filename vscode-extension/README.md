@@ -20,16 +20,48 @@ actually hosts the folder:
 2. Install into Windows VS Code (local folder):
 
    ```sh
-   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.9.0.vsix")" --force
+   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.10.0.vsix")" --force
    ```
 
    Or, inside a Remote-WSL window, use the integrated terminal:
 
    ```sh
-   code --install-extension "$PWD/anymaker-scripting-0.9.0.vsix" --force
+   code --install-extension "$PWD/anymaker-scripting-0.10.0.vsix" --force
    ```
 
 3. Reload VS Code.
+
+## Databus schema
+
+A script automatically connects to a JSON file with the same basename: `Foo.amc`
+uses `Foo.json` from the same folder.
+
+```json
+{
+  "in": {
+    "ASM_Power_Main.input": {
+      "type": "fractional",
+      "description": "Main Power Relay (1 -> on)"
+    }
+  },
+  "out": {
+    "Btn_Start_Stop.is_pressed": {
+      "type": "bool",
+      "description": "Whether Start/Stop is pressed"
+    }
+  }
+}
+```
+
+- `in` variables are written by the script to affect the game.
+- `out` variables are read by the script from the game.
+- Each entry has a `type` (`bool`, `integer`, `fractional`, `string`,
+  `analogue`, and `boolean` is accepted as `bool`) and an optional
+  `description`.
+
+The schema drives validation (unknown paths, wrong direction, type mismatches),
+completion after `in`/`out`, and hover type/description. Edits to the JSON are
+picked up live.
 
 ## Scope-aware colors
 
@@ -76,8 +108,8 @@ the script and validates the language rules, including:
 - structural rules (`on_tick` once, functions before `on_tick`, no top-level
   `call`/`repeat`, no recursion, no forward calls)
 - comments longer than 31 characters (warning)
-
-Databus `in`/`out` names and types come from the game, so they are not checked.
+- databus paths when a `<script>.json` schema exists: unknown paths, wrong
+  direction, and assignment/expression type mismatches
 
 ## Quick fixes
 
@@ -128,13 +160,16 @@ signature and a short description.
 - Built-ins show typed signatures such as `atan (x: fractional) -> fractional`.
 - Consecutive `#` comment lines immediately above a declaration (no blank line
   between) are shown as its documentation in the hover.
+- Databus `in`/`out` paths show their direction, type, and description from the
+  matching `<script>.json` schema.
 
 ## IntelliSense
 
 - **Completion**: keywords and declaration kinds after `define`; valid types in
   type positions (including function signatures); variables after `var`;
-  parameters after `param`; functions after `call`; members after `.`; and a
-  general list of builtins, types, and in-scope symbols elsewhere.
+  parameters after `param`; functions after `call`; members after `.`; databus
+  paths (with type/description) after `in`/`out`; and a general list of
+  builtins, types, and in-scope symbols elsewhere.
 - **Signature help**: parameter hints for `call f (` and for builtins such as
   `rand (`, `atan (`, and `to_integer (`. Tracks the active parameter across
   commas.

@@ -7,7 +7,8 @@ const { documentSymbols } = require('./symbols');
 const { foldingRanges } = require('./folding');
 const { lookupHover } = require('./hover');
 const { registerIntellisense } = require('./intellisense');
-const { getModel, isExcluded } = require('./model');
+const { getModel, isExcluded, databusContextAt } = require('./model');
+const { loadSchema, clearSchema } = require('./databus');
 
 const SYMBOL_KINDS = {
   function: vscode.SymbolKind.Function,
@@ -70,7 +71,7 @@ function updateEditor(editor) {
   editor.setDecorations(outType, toRanges(editor.document, result.outVars));
 }
 
-function refreshDiagnostics(document) {
+async function refreshDiagnostics(document) {
   if (!diagnostics) return;
   const key = document.uri.toString();
   if (document.languageId !== 'anymaker') {
@@ -78,9 +79,12 @@ function refreshDiagnostics(document) {
     checked.delete(key);
     return;
   }
+  const version = document.version;
+  const schema = await loadSchema(document);
+  if (document.version !== version) return;
   let result;
   try {
-    result = check(document.getText());
+    result = check(document.getText(), schema);
   } catch (error) {
     return;
   }
@@ -99,9 +103,18 @@ function refreshDiagnostics(document) {
 }
 
 function refresh(document) {
-  refreshDiagnostics(document);
   for (const editor of vscode.window.visibleTextEditors) {
     if (editor.document === document) updateEditor(editor);
+  }
+  refreshDiagnostics(document);
+}
+
+function handleSchemaFile(uri) {
+  if (!/\.json$/i.test(uri.path)) return;
+  clearSchema(uri);
+  const amcUri = uri.with({ path: uri.path.replace(/\.json$/i, '.amc') });
+  for (const document of vscode.workspace.textDocuments) {
+    if (document.uri.toString() === amcUri.toString()) refreshDiagnostics(document);
   }
 }
 
@@ -166,13 +179,39 @@ function commentAbove(document, decl) {
   return comments;
 }
 
-function provideHover(document, position) {
+async function provideDatabusHover(document, context) {
+  const schema = await loadSchema(document);
+  const entry = schema && schema[context.direction] && schema[context.direction][context.path];
+  const type = entry && entry.type ? entry.type : 'unknown';
+  const markdown = new vscode.MarkdownString();
+  markdown.appendMarkdown(`**databus ${context.direction}** · \`${type}\`\n\n`);
+  markdown.appendCodeblock(`${context.direction} ${context.path}`, 'anymaker');
+  if (entry && entry.description) {
+    markdown.appendMarkdown('\n\n');
+    markdown.appendText(entry.description);
+  } else if (!schema) {
+    const base = document.uri.path.split('/').pop().replace(/\.amc$/i, '.json');
+    markdown.appendMarkdown(`\n\nNo matching \`${base}\` databus schema found.`);
+  } else {
+    markdown.appendMarkdown(`\n\nUnknown databus '${context.direction}' path.`);
+  }
+  const range = new vscode.Range(document.positionAt(context.start), document.positionAt(context.end));
+  return new vscode.Hover(markdown, range);
+}
+
+async function provideHover(document, position) {
+  const model = getModel(document);
+  const offset = document.offsetAt(position);
+  const databus = databusContextAt(model, offset);
+  if (databus && databus.inPath) {
+    return provideDatabusHover(document, databus);
+  }
+
   const range = document.getWordRangeAtPosition(position, /[A-Za-z_][A-Za-z0-9_]*/);
   if (!range) return null;
   const word = document.getText(range);
-  const offset = document.offsetAt(range.start);
-  const model = getModel(document);
-  const decl = isExcluded(model, offset) ? null : model.byName.get(word) || null;
+  const wordOffset = document.offsetAt(range.start);
+  const decl = isExcluded(model, wordOffset) ? null : model.byName.get(word) || null;
   const info = lookupHover(word);
   if (!decl && !info) return null;
 
@@ -261,7 +300,19 @@ function activate(context) {
   updateVisible();
 
   context.subscriptions.push(
-    vscode.workspace.onDidChangeTextDocument((event) => schedule(event.document)),
+    vscode.workspace.onDidChangeTextDocument((event) => {
+      schedule(event.document);
+      if (/\.json$/i.test(event.document.uri.path)) handleSchemaFile(event.document.uri);
+    }),
+    vscode.workspace.onDidSaveTextDocument((document) => handleSchemaFile(document.uri)),
+    vscode.workspace.onDidCreateFiles((event) => event.files.forEach(handleSchemaFile)),
+    vscode.workspace.onDidDeleteFiles((event) => event.files.forEach(handleSchemaFile)),
+    vscode.workspace.onDidRenameFiles((event) =>
+      event.files.forEach((file) => {
+        handleSchemaFile(file.oldUri);
+        handleSchemaFile(file.newUri);
+      })
+    ),
     vscode.workspace.onDidOpenTextDocument((document) => refresh(document)),
     vscode.workspace.onDidCloseTextDocument((document) => {
       diagnostics.delete(document.uri);
