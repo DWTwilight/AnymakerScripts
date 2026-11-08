@@ -1,0 +1,37 @@
+# Stairwell light with timeout.
+# Bind Button.is_pressed
+# (bool) and Lamp.is_on
+# (bool).
+define type LampTimer
+{
+	define member bool active
+	define member integer remaining
+}
+define var LampTimer stairwell
+define var bool lastPressed
+var stairwell.active = false
+var stairwell.remaining = 0
+var lastPressed = false
+on_tick
+{
+	define var bool pressed
+	var pressed = out Button.is_pressed
+	if (var pressed && ! (var lastPressed))
+	{
+		var stairwell.active = true
+		var stairwell.remaining = 300
+	}
+	var lastPressed = var pressed
+	if (var stairwell.active)
+	{
+		if (var stairwell.remaining > 0)
+		{
+			var stairwell.remaining = var stairwell.remaining - 1
+		}
+		else
+		{
+			var stairwell.active = false
+		}
+	}
+	in Lamp.is_on = var stairwell.active
+}

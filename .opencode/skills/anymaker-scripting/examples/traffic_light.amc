@@ -1,0 +1,53 @@
+# Traffic light state machine.
+# Bind Light.red/amber/green
+# (bool) outputs.
+# Timings are in ticks.
+define type LightTiming
+{
+	define member integer red
+	define member integer redAmber
+	define member integer green
+	define member integer amber
+}
+define var LightTiming timing
+define var integer phase
+define var integer elapsed
+var timing.red = 180
+var timing.redAmber = 30
+var timing.green = 150
+var timing.amber = 30
+var phase = 0
+var elapsed = 0
+on_tick
+{
+	var elapsed = var elapsed + 1
+	if ((var phase == 0) && (var elapsed >= var timing.red))
+	{
+		var phase = 1
+		var elapsed = 0
+	}
+	elseif ((var phase == 1) && (var elapsed >= var timing.redAmber))
+	{
+		var phase = 2
+		var elapsed = 0
+	}
+	elseif ((var phase == 2) && (var elapsed >= var timing.green))
+	{
+		var phase = 3
+		var elapsed = 0
+	}
+	elseif ((var phase == 3) && (var elapsed >= var timing.amber))
+	{
+		var phase = 0
+		var elapsed = 0
+	}
+	define var bool redOn
+	define var bool amberOn
+	define var bool greenOn
+	var redOn = ((var phase == 0) || (var phase == 1))
+	var amberOn = ((var phase == 1) || (var phase == 3))
+	var greenOn = (var phase == 2)
+	in Light.red = var redOn
+	in Light.amber = var amberOn
+	in Light.green = var greenOn
+}

@@ -1,0 +1,31 @@
+# Smooth a noisy sensor.
+# Bind Sensor.raw (fractional)
+# and Sensor.smooth (frac).
+define list fractional recent
+define function average4 (fractional a, fractional b, fractional c, fractional d, fractional result)
+{
+	define var fractional sum
+	var sum = param a + param b
+	var sum = var sum + param c
+	var sum = var sum + param d
+	param result = var sum / 4.0
+}
+on_tick
+{
+	define var fractional sample
+	var sample = out Sensor.raw
+	var recent append (var sample)
+	define var integer count
+	var count = len (var recent)
+	if (var count > 4)
+	{
+		var recent erase (0)
+		var count = len (var recent)
+	}
+	if (var count == 4)
+	{
+		define var fractional avg
+		call average4 (var recent[0], var recent[1], var recent[2], var recent[3], var avg)
+		in Sensor.smooth = var avg
+	}
+}

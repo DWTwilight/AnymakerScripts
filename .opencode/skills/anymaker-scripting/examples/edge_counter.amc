@@ -1,0 +1,18 @@
+# Count door openings.
+# Bind Door.is_open (bool) and
+# Count.door_opens (integer).
+define var bool lastOpen
+define var integer openCount
+var lastOpen = false
+var openCount = 0
+on_tick
+{
+	define var bool openNow
+	var openNow = out Door.is_open
+	if (var openNow && ! (var lastOpen))
+	{
+		var openCount = var openCount + 1
+	}
+	var lastOpen = var openNow
+	in Count.door_opens = var openCount
+}

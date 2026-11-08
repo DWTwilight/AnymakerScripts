@@ -1,0 +1,15 @@
+# Slow breathing lamp.
+# Bind Lamp.level (frac).
+define var fractional phase
+var phase = 0.0
+on_tick
+{
+	var phase = var phase + 0.01
+	if (var phase > 6.283)
+	{
+		var phase = 0.0
+	}
+	define var fractional level
+	var level = (sin (var phase) + 1.0) / 2.0
+	in Lamp.level = var level
+}

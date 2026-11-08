@@ -1,0 +1,26 @@
+# Strobe a beacon in a pattern.
+# Bind Beacon.is_on (bool).
+define list bool pattern
+define var bool initialized
+define var integer fillIndex
+var initialized = false
+var fillIndex = 0
+on_tick
+{
+	if (! (var initialized))
+	{
+		repeat (32)
+		{
+			define var bool fillLit
+			var fillLit = (var fillIndex % 32) == 0
+			var pattern append (var fillLit)
+			var fillIndex = var fillIndex + 1
+		}
+		var initialized = true
+	}
+	define var bool stepLit
+	var stepLit = var pattern[0]
+	var pattern erase (0)
+	var pattern append (var stepLit)
+	in Beacon.is_on = var stepLit
+}

@@ -1,0 +1,25 @@
+# Blink a lamp every second.
+# Bind Lamp.is_on (bool).
+define var bool lampOn
+define var integer tickCount
+define var integer halfPeriod
+var lampOn = false
+var tickCount = 0
+var halfPeriod = 30
+on_tick
+{
+	var tickCount = var tickCount + 1
+	if (var tickCount >= var halfPeriod)
+	{
+		var tickCount = 0
+		if (var lampOn)
+		{
+			var lampOn = false
+		}
+		else
+		{
+			var lampOn = true
+		}
+	}
+	in Lamp.is_on = var lampOn
+}

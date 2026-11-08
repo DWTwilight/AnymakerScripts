@@ -1,0 +1,52 @@
+# Fade lamp to occupancy.
+# Bind Room.is_occupied (bool).
+# Bind Lamp.brightness (frac).
+define var fractional level
+define var fractional target
+define var fractional step
+define function approach (fractional current, fractional goal, fractional rate, fractional result)
+{
+	define var fractional moved
+	if (param current < param goal)
+	{
+		var moved = param current + param rate
+		if (var moved > param goal)
+		{
+			var moved = param goal
+		}
+		param result = var moved
+	}
+	elseif (param current > param goal)
+	{
+		var moved = param current - param rate
+		if (var moved < param goal)
+		{
+			var moved = param goal
+		}
+		param result = var moved
+	}
+	else
+	{
+		param result = param goal
+	}
+}
+var level = 0.0
+var target = 0.0
+var step = 0.02
+on_tick
+{
+	define var bool occupied
+	var occupied = out Room.is_occupied
+	if (var occupied)
+	{
+		var target = 1.0
+	}
+	else
+	{
+		var target = 0.0
+	}
+	define var fractional nextLevel
+	call approach (var level, var target, var step, var nextLevel)
+	var level = var nextLevel
+	in Lamp.brightness = var level
+}

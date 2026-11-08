@@ -1,0 +1,24 @@
+# Thermostat with hysteresis.
+# Bind Room.temperature
+# (fractional) and
+# Heater.is_on (bool).
+define var fractional lowLimit
+define var fractional highLimit
+define var bool heaterOn
+var lowLimit = 18.0
+var highLimit = 21.0
+var heaterOn = false
+on_tick
+{
+	define var fractional temp
+	var temp = out Room.temperature
+	if (var temp < var lowLimit)
+	{
+		var heaterOn = true
+	}
+	elseif (var temp > var highLimit)
+	{
+		var heaterOn = false
+	}
+	in Heater.is_on = var heaterOn
+}

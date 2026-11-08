@@ -1,0 +1,46 @@
+{
+  "name": "anymaker-scripting",
+  "displayName": "AnyMaker Scripting",
+  "description": "Syntax highlighting and scope-aware coloring for AnyMaker .amc scripts",
+  "version": "0.3.0",
+  "publisher": "local",
+  "main": "./extension.js",
+  "extensionKind": [
+    "workspace"
+  ],
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "activationEvents": [
+    "onLanguage:anymaker"
+  ],
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "anymaker",
+    "amc"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "anymaker",
+        "aliases": [
+          "AnyMaker",
+          "anymaker"
+        ],
+        "extensions": [
+          ".amc"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "anymaker",
+        "scopeName": "source.amc",
+        "path": "./syntaxes/anymaker.tmLanguage.json"
+      }
+    ]
+  }
+}

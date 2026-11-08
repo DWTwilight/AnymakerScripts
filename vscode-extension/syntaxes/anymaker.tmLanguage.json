@@ -1,0 +1,173 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "AnyMaker",
+  "scopeName": "source.amc",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#databus" },
+    { "include": "#definitions" },
+    { "include": "#references" },
+    { "include": "#keywords" },
+    { "include": "#numbers" },
+    { "include": "#operators" },
+    { "include": "#punctuation" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "match": "#.*$",
+          "name": "comment.line.number-sign.amc"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "begin": "\"",
+          "end": "\"",
+          "name": "string.quoted.double.amc"
+        }
+      ]
+    },
+    "databus": {
+      "patterns": [
+        {
+          "match": "\\b(in|out)\\s+([A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*)",
+          "captures": {
+            "1": { "name": "keyword.other.direction.amc" },
+            "2": { "name": "variable.other.databus.amc" }
+          }
+        }
+      ]
+    },
+    "definitions": {
+      "patterns": [
+        {
+          "match": "\\b(define)\\s+(function)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "keyword.declaration.amc" },
+            "2": { "name": "storage.type.function.amc" },
+            "3": { "name": "entity.name.function.amc" }
+          }
+        },
+        {
+          "match": "\\b(define)\\s+(type)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "keyword.declaration.amc" },
+            "2": { "name": "storage.type.type.amc" },
+            "3": { "name": "entity.name.type.amc" }
+          }
+        },
+        {
+          "match": "\\b(define)\\s+(member)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "keyword.declaration.amc" },
+            "2": { "name": "keyword.declaration.amc" },
+            "3": { "name": "storage.type.amc" },
+            "4": { "name": "variable.other.member.amc" }
+          }
+        },
+        {
+          "match": "\\b(define)\\s+(var|list)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "keyword.declaration.amc" },
+            "2": { "name": "keyword.declaration.amc" },
+            "3": { "name": "storage.type.amc" },
+            "4": { "name": "variable.other.readwrite.amc" }
+          }
+        }
+      ]
+    },
+    "references": {
+      "patterns": [
+        {
+          "match": "\\b(param)\\s+([A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*)",
+          "captures": {
+            "1": { "name": "keyword.other.param.amc" },
+            "2": { "name": "variable.parameter.amc" }
+          }
+        },
+        {
+          "match": "\\b(call)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "keyword.other.call.amc" },
+            "2": { "name": "entity.name.function.call.amc" }
+          }
+        },
+        {
+          "match": "\\b(var)\\s+([A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*)",
+          "captures": {
+            "1": { "name": "keyword.other.var.amc" },
+            "2": { "name": "variable.other.readwrite.amc" }
+          }
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "match": "\\b(true|false)\\b",
+          "name": "constant.language.boolean.amc"
+        },
+        {
+          "match": "\\b(if|elseif|else|repeat|contains)\\b",
+          "name": "keyword.control.amc"
+        },
+        {
+          "match": "\\b(on_tick)\\b",
+          "name": "keyword.other.entrypoint.amc"
+        },
+        {
+          "match": "\\b(abs|floor|ceil|round|sqrt|exp|ln|log2|sin|cos|tan|asin|acos|atan|rand|len|to_integer|to_fractional)\\b",
+          "name": "support.function.builtin.amc"
+        },
+        {
+          "match": "\\b(bool|integer|fractional|string|analogue)\\b",
+          "name": "storage.type.amc"
+        },
+        {
+          "match": "\\b(define|var|param|call|type|member|function|list|in|out)\\b",
+          "name": "keyword.other.amc"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "match": "(?<![A-Za-z0-9_.])-?\\d+\\.\\d*",
+          "name": "constant.numeric.float.amc"
+        },
+        {
+          "match": "(?<![A-Za-z0-9_.])-?\\d+",
+          "name": "constant.numeric.integer.amc"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "match": "&&|\\|\\||==|>=|<=|!=",
+          "name": "keyword.operator.logical.amc"
+        },
+        {
+          "match": "[+\\-*/%^<>!]",
+          "name": "keyword.operator.amc"
+        },
+        {
+          "match": "=",
+          "name": "keyword.operator.assignment.amc"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "match": "[{}()\\[\\],.]",
+          "name": "punctuation.separator.amc"
+        }
+      ]
+    }
+  }
+}
