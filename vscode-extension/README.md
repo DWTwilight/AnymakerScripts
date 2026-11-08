@@ -20,13 +20,13 @@ actually hosts the folder:
 2. Install into Windows VS Code (local folder):
 
    ```sh
-   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.11.0.vsix")" --force
+   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.12.0.vsix")" --force
    ```
 
    Or, inside a Remote-WSL window, use the integrated terminal:
 
    ```sh
-   code --install-extension "$PWD/anymaker-scripting-0.11.0.vsix" --force
+   code --install-extension "$PWD/anymaker-scripting-0.12.0.vsix" --force
    ```
 
 3. Reload VS Code.
@@ -162,6 +162,9 @@ signature and a short description.
   between) are shown as its documentation in the hover.
 - Databus `in`/`out` paths show their direction, type, and description from the
   matching `<script>.json` schema.
+- Global values that are assigned once from a constant expression show their
+  computed value, including derived math such as
+  `MAX_INNER_STEER_ANGLE = atan (...)`.
 
 ## IntelliSense
 

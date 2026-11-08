@@ -9,6 +9,7 @@ const { lookupHover } = require('./hover');
 const { registerIntellisense } = require('./intellisense');
 const { getModel, isExcluded, databusContextAt } = require('./model');
 const { loadSchema, clearSchema } = require('./databus');
+const { getConstants, clearConstants } = require('./constants');
 
 const SYMBOL_KINDS = {
   function: vscode.SymbolKind.Function,
@@ -221,6 +222,12 @@ async function provideHover(document, position) {
     const label = view.type ? `**${view.label}** · \`${view.type}\`` : `**${view.label}**`;
     markdown.appendMarkdown(`${label}\n\n`);
     markdown.appendCodeblock(view.code, 'anymaker');
+    if (decl.kind === 'global') {
+      const constant = getConstants(document).get(decl.name);
+      if (constant) {
+        markdown.appendMarkdown(`\n\n**Value:** \`${constant.display}\``);
+      }
+    }
     const comments = commentAbove(document, decl);
     for (const comment of comments) {
       markdown.appendMarkdown('\n\n');
@@ -317,6 +324,7 @@ function activate(context) {
     vscode.workspace.onDidCloseTextDocument((document) => {
       diagnostics.delete(document.uri);
       checked.delete(document.uri.toString());
+      clearConstants(document.uri);
     }),
     vscode.languages.registerCodeActionsProvider(
       'anymaker',
