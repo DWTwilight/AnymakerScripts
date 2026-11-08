@@ -7,6 +7,7 @@ const { documentSymbols } = require('./symbols');
 const { foldingRanges } = require('./folding');
 const { lookupHover } = require('./hover');
 const { registerIntellisense } = require('./intellisense');
+const { getModel, isExcluded } = require('./model');
 
 const SYMBOL_KINDS = {
   function: vscode.SymbolKind.Function,
@@ -123,34 +124,33 @@ function toDocumentSymbol(document, symbol) {
   return result;
 }
 
-function findSymbol(symbols, name) {
-  for (const symbol of symbols) {
-    if (symbol.name === name) return symbol;
-    if (symbol.children) {
-      const found = findSymbol(symbol.children, name);
-      if (found) return found;
+function symbolHover(decl) {
+  switch (decl.kind) {
+    case 'function': {
+      const params = (decl.params || []).map((param) => `${param.type} ${param.name}`).join(', ');
+      return { label: 'function', code: `define function ${decl.name} (${params})` };
     }
-  }
-  return null;
-}
-
-function symbolDeclaration(symbol) {
-  const detail = symbol.detail ? `${symbol.detail} ` : '';
-  switch (symbol.kind) {
-    case 'function':
-      return `define function ${symbol.name} (...)`;
-    case 'type':
-      return `define type ${symbol.name}`;
-    case 'variable':
-      return `define var ${detail}${symbol.name}`;
-    case 'event':
-      return 'on_tick';
+    case 'type': {
+      const members = (decl.members || []).map((member) => `\t${member.type} ${member.name}`).join('\n');
+      return { label: 'type', code: `define type ${decl.name}\n{\n${members}\n}` };
+    }
+    case 'global':
+    case 'local': {
+      const label = decl.kind === 'global' ? 'global variable' : 'local variable';
+      if (decl.type && decl.type.startsWith('list<') && decl.type.endsWith('>')) {
+        const element = decl.type.slice(5, -1);
+        return { label, type: decl.type, code: `define list ${element} ${decl.name}` };
+      }
+      return { label, type: decl.type, code: `define var ${decl.type} ${decl.name}` };
+    }
     case 'param':
-      return `param ${detail}${symbol.name}`;
+      return { label: 'parameter', type: decl.type, code: `param ${decl.type} ${decl.name}` };
     case 'member':
-      return `define member ${detail}${symbol.name}`;
+      return { label: 'member', type: decl.type, code: `define member ${decl.type} ${decl.name}` };
+    case 'event':
+      return { label: 'entrypoint', code: 'on_tick' };
     default:
-      return `${detail}${symbol.name}`;
+      return { label: decl.kind, code: decl.name };
   }
 }
 
@@ -158,21 +158,22 @@ function provideHover(document, position) {
   const range = document.getWordRangeAtPosition(position, /[A-Za-z_][A-Za-z0-9_]*/);
   if (!range) return null;
   const word = document.getText(range);
-  let symbol = null;
-  try {
-    symbol = findSymbol(documentSymbols(document.getText()), word);
-  } catch (error) {
-    symbol = null;
-  }
+  const offset = document.offsetAt(range.start);
+  const model = getModel(document);
+  const decl = isExcluded(model, offset) ? null : model.byName.get(word) || null;
   const info = lookupHover(word);
-  if (!symbol && !info) return null;
+  if (!decl && !info) return null;
+
   const markdown = new vscode.MarkdownString();
-  if (symbol) {
-    markdown.appendCodeblock(symbolDeclaration(symbol), 'amc');
+  if (decl) {
+    const view = symbolHover(decl);
+    const label = view.type ? `**${view.label}** · \`${view.type}\`` : `**${view.label}**`;
+    markdown.appendMarkdown(`${label}\n\n`);
+    markdown.appendCodeblock(view.code, 'anymaker');
   }
   if (info) {
-    if (symbol) markdown.appendMarkdown('\n---\n');
-    if (info.signature) markdown.appendCodeblock(info.signature, 'amc');
+    if (decl) markdown.appendMarkdown('\n---\n');
+    if (info.signature) markdown.appendCodeblock(info.signature, 'anymaker');
     if (info.description) markdown.appendMarkdown(info.description);
   }
   return new vscode.Hover(markdown, range);

@@ -1,7 +1,7 @@
 'use strict';
 
 const vscode = require('vscode');
-const { buildModel } = require('./model');
+const { getModel, clearModel, isExcluded } = require('./model');
 const { lookupHover, builtinSignature, BUILTINS } = require('./hover');
 const { RESERVED } = require('./checker');
 
@@ -14,29 +14,6 @@ const KEYWORDS = [
   'in', 'out', 'on_tick',
 ];
 const DECL_KEYWORDS = ['var', 'list', 'type', 'member', 'function'];
-
-const cache = new Map();
-
-function getModel(document) {
-  const key = document.uri.toString();
-  const cached = cache.get(key);
-  if (cached && cached.version === document.version) return cached.model;
-  const model = buildModel(document.getText());
-  cache.set(key, { version: document.version, model });
-  return model;
-}
-
-function isExcluded(model, offset) {
-  for (const token of model.allTokens) {
-    if ((token.type === 'comment' || token.type === 'string') && token.start <= offset && offset < token.end) {
-      return true;
-    }
-  }
-  for (const path of model.databus) {
-    if (path.start <= offset && offset < path.end) return true;
-  }
-  return false;
-}
 
 function lastToken(tokens, anchor) {
   let result = null;
@@ -394,7 +371,7 @@ function registerIntellisense() {
     vscode.languages.registerDefinitionProvider('anymaker', { provideDefinition }),
     vscode.languages.registerReferenceProvider('anymaker', { provideReferences }),
     vscode.languages.registerRenameProvider('anymaker', { prepareRename, provideRenameEdits }),
-    vscode.workspace.onDidCloseTextDocument((document) => cache.delete(document.uri.toString())),
+    vscode.workspace.onDidCloseTextDocument((document) => clearModel(document.uri)),
   ];
 }
 

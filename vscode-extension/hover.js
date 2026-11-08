@@ -1,24 +1,26 @@
 'use strict';
 
+const NUM = 'integer | fractional';
+
 const BUILTINS = new Map([
-  ['abs', { signature: 'abs (x)', description: 'Absolute value. Takes integer or fractional and returns the same numeric type.' }],
-  ['floor', { signature: 'floor (x)', description: 'Round down. Takes integer or fractional and returns the same numeric type.' }],
-  ['ceil', { signature: 'ceil (x)', description: 'Round up. Takes integer or fractional and returns the same numeric type.' }],
-  ['round', { signature: 'round (x)', description: 'Round to nearest. Takes integer or fractional and returns the same numeric type.' }],
-  ['sqrt', { signature: 'sqrt (x)', description: 'Square root. Takes integer or fractional and returns the same numeric type.' }],
-  ['exp', { signature: 'exp (x)', description: 'e raised to x. Takes a numeric value and returns fractional.' }],
-  ['ln', { signature: 'ln (x)', description: 'Natural logarithm. Takes a numeric value and returns fractional.' }],
-  ['log2', { signature: 'log2 (x)', description: 'Base-2 logarithm. Takes a numeric value and returns fractional.' }],
-  ['sin', { signature: 'sin (x)', description: 'Sine. Requires a fractional argument and returns fractional.' }],
-  ['cos', { signature: 'cos (x)', description: 'Cosine. Requires a fractional argument and returns fractional.' }],
-  ['tan', { signature: 'tan (x)', description: 'Tangent. Requires a fractional argument and returns fractional.' }],
-  ['asin', { signature: 'asin (x)', description: 'Arcsine. Requires a fractional argument and returns fractional.' }],
-  ['acos', { signature: 'acos (x)', description: 'Arccosine. Requires a fractional argument and returns fractional.' }],
-  ['atan', { signature: 'atan (x)', description: 'Arctangent. Requires a fractional argument and returns fractional.' }],
-  ['rand', { signature: 'rand (a, b)', description: 'Random value of the same numeric type, inclusive of both ends. Both arguments must have the same type.' }],
-  ['len', { signature: 'len (x)', description: 'Length of a string or list. Returns integer.' }],
-  ['to_integer', { signature: 'to_integer (x)', description: 'Convert a numeric value to integer, rounding to nearest (ties to even).' }],
-  ['to_fractional', { signature: 'to_fractional (x)', description: 'Convert an integer to fractional.' }],
+  ['abs', { signature: `abs (x: ${NUM}) -> ${NUM}`, description: 'Absolute value. Takes integer or fractional and returns the same numeric type.' }],
+  ['floor', { signature: `floor (x: ${NUM}) -> ${NUM}`, description: 'Round down. Takes integer or fractional and returns the same numeric type.' }],
+  ['ceil', { signature: `ceil (x: ${NUM}) -> ${NUM}`, description: 'Round up. Takes integer or fractional and returns the same numeric type.' }],
+  ['round', { signature: `round (x: ${NUM}) -> ${NUM}`, description: 'Round to nearest. Takes integer or fractional and returns the same numeric type.' }],
+  ['sqrt', { signature: `sqrt (x: ${NUM}) -> ${NUM}`, description: 'Square root. Takes integer or fractional and returns the same numeric type.' }],
+  ['exp', { signature: `exp (x: ${NUM}) -> fractional`, description: 'e raised to x. Takes a numeric value and returns fractional.' }],
+  ['ln', { signature: `ln (x: ${NUM}) -> fractional`, description: 'Natural logarithm. Takes a numeric value and returns fractional.' }],
+  ['log2', { signature: `log2 (x: ${NUM}) -> fractional`, description: 'Base-2 logarithm. Takes a numeric value and returns fractional.' }],
+  ['sin', { signature: 'sin (x: fractional) -> fractional', description: 'Sine. Requires a fractional argument and returns fractional.' }],
+  ['cos', { signature: 'cos (x: fractional) -> fractional', description: 'Cosine. Requires a fractional argument and returns fractional.' }],
+  ['tan', { signature: 'tan (x: fractional) -> fractional', description: 'Tangent. Requires a fractional argument and returns fractional.' }],
+  ['asin', { signature: 'asin (x: fractional) -> fractional', description: 'Arcsine. Requires a fractional argument and returns fractional.' }],
+  ['acos', { signature: 'acos (x: fractional) -> fractional', description: 'Arccosine. Requires a fractional argument and returns fractional.' }],
+  ['atan', { signature: 'atan (x: fractional) -> fractional', description: 'Arctangent. Requires a fractional argument and returns fractional.' }],
+  ['rand', { signature: `rand (a: ${NUM}, b: ${NUM}) -> ${NUM}`, description: 'Random value of the same numeric type, inclusive of both ends. Both arguments must have the same type.' }],
+  ['len', { signature: 'len (x: string | list) -> integer', description: 'Length of a string or list. Returns integer.' }],
+  ['to_integer', { signature: `to_integer (x: ${NUM}) -> integer`, description: 'Convert a numeric value to integer, rounding to nearest (ties to even).' }],
+  ['to_fractional', { signature: 'to_fractional (x: integer) -> fractional', description: 'Convert an integer to fractional.' }],
 ]);
 
 const KEYWORDS = new Map([

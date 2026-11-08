@@ -20,13 +20,13 @@ actually hosts the folder:
 2. Install into Windows VS Code (local folder):
 
    ```sh
-   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.7.0.vsix")" --force
+   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.8.0.vsix")" --force
    ```
 
    Or, inside a Remote-WSL window, use the integrated terminal:
 
    ```sh
-   code --install-extension "$PWD/anymaker-scripting-0.7.0.vsix" --force
+   code --install-extension "$PWD/anymaker-scripting-0.8.0.vsix" --force
    ```
 
 3. Reload VS Code.
@@ -117,9 +117,15 @@ spaces) are respected.
 
 ## Hover
 
-Hover a built-in, type, keyword, or declared symbol to see its signature and a
-short description. Declared globals, functions, types, members, and parameters
-show their declaration form.
+Hover a built-in, type, keyword, or declared symbol to see a syntax-highlighted
+signature and a short description.
+
+- Declared symbols show their kind and type, e.g. `**global variable** ·
+  \`integer\``, plus the full declaration.
+- Functions show all parameter types: `define function clamp (fractional
+  inputValue, ...)`.
+- Custom types show their member block.
+- Built-ins show typed signatures such as `atan (x: fractional) -> fractional`.
 
 ## IntelliSense
 

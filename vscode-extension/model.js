@@ -309,4 +309,35 @@ function buildModel(text) {
   };
 }
 
-module.exports = { buildModel, BUILTIN_TYPES };
+const cache = new Map();
+
+function getModel(document) {
+  const key = document.uri.toString();
+  const cached = cache.get(key);
+  if (cached && cached.version === document.version) return cached.model;
+  const model = buildModel(document.getText());
+  cache.set(key, { version: document.version, model });
+  return model;
+}
+
+function clearModel(uri) {
+  cache.delete(uri.toString());
+}
+
+function isExcluded(model, offset) {
+  for (const token of model.allTokens) {
+    if (
+      (token.type === 'comment' || token.type === 'string') &&
+      token.start <= offset &&
+      offset < token.end
+    ) {
+      return true;
+    }
+  }
+  for (const path of model.databus) {
+    if (path.start <= offset && offset < path.end) return true;
+  }
+  return false;
+}
+
+module.exports = { buildModel, getModel, clearModel, isExcluded, BUILTIN_TYPES };
