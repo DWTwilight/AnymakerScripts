@@ -1,0 +1,17 @@
+{
+    "in": {
+        "Light.red": {
+            "type": "bool",
+            "description": "true turns the red light on"
+        },
+        "Light.amber": {
+            "type": "bool",
+            "description": "true turns the amber light on"
+        },
+        "Light.green": {
+            "type": "bool",
+            "description": "true turns the green light on"
+        }
+    },
+    "out": {}
+}

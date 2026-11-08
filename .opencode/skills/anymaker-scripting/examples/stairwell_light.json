@@ -1,0 +1,14 @@
+{
+    "in": {
+        "Lamp.is_on": {
+            "type": "bool",
+            "description": "true turns the stairwell light on"
+        }
+    },
+    "out": {
+        "Button.is_pressed": {
+            "type": "bool",
+            "description": "true while the button is pressed"
+        }
+    }
+}

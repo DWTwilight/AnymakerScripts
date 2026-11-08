@@ -1,0 +1,14 @@
+{
+    "in": {
+        "Count.door_opens": {
+            "type": "integer",
+            "description": "Total number of door openings"
+        }
+    },
+    "out": {
+        "Door.is_open": {
+            "type": "bool",
+            "description": "true while the door is open"
+        }
+    }
+}

@@ -1,0 +1,14 @@
+{
+    "in": {
+        "Lamp.brightness": {
+            "type": "fractional",
+            "description": "Lamp brightness, 0.0 to 1.0"
+        }
+    },
+    "out": {
+        "Room.is_occupied": {
+            "type": "bool",
+            "description": "true when the room is occupied"
+        }
+    }
+}

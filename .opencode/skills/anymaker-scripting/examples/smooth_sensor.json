@@ -1,0 +1,14 @@
+{
+    "in": {
+        "Sensor.smooth": {
+            "type": "fractional",
+            "description": "Smoothed sensor value"
+        }
+    },
+    "out": {
+        "Sensor.raw": {
+            "type": "fractional",
+            "description": "Raw sensor value"
+        }
+    }
+}

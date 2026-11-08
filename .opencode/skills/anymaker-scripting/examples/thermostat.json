@@ -1,0 +1,14 @@
+{
+    "in": {
+        "Heater.is_on": {
+            "type": "bool",
+            "description": "true turns the heater on"
+        }
+    },
+    "out": {
+        "Room.temperature": {
+            "type": "fractional",
+            "description": "Current room temperature"
+        }
+    }
+}

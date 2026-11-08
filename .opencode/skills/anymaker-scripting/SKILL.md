@@ -351,7 +351,8 @@ outside the script. They are never declared and are used directly with the `in`
   `var open = out FL_Door_Handle.is_active && ! (out Door_Lock.is_pressed)`.
 - Paths are dotted names such as `Dial.is_illuminated` or
   `FL_Door_Handle_Outer.is_active`. Their availability and types depend on the
-  databus; names and types are supplied by the user, so never invent them.
+  databus; names and types are supplied by the user, so never invent them. They
+  may optionally be recorded in a same-basename `.json` editor helper (below).
 
 ```
 in <inputPath> = <value>
@@ -370,6 +371,35 @@ on_tick
 
 Put such statements in `on_tick` to copy each tick, or in global code for a
 one-time copy.
+
+### Optional databus schema (editor helper only)
+
+The game does **not** read this file. A script may have a JSON file with the
+**same basename** in the same folder, used only by editors/tooling:
+
+```
+Foo.amc  <->  Foo.json
+```
+
+```json
+{
+  "in": {
+    "Lamp.is_on": {
+      "type": "bool",
+      "description": "true turns the lamp on"
+    }
+  },
+  "out": {}
+}
+```
+
+- `in` — paths the script **writes** (affect the game).
+- `out` — paths the script **reads** (come from the game).
+- `type` is `bool`, `integer`, `fractional`, `string`, or `analogue`
+  (`boolean` is accepted as `bool`). `description` is free text.
+- The AnyMaker Scripting VS Code extension uses it for path validation,
+  completion after `in` / `out`, and hover type/description.
+- **Not required by the game**: scripts run normally without it.
 
 ## Functions
 
@@ -571,6 +601,11 @@ the databus paths it expects; bind those `in`/`out` variables with the types
 noted in the comments before testing. Tune the named globals (periods, limits,
 rates) to match your game.
 
+Every example has a companion same-basename databus schema (e.g.,
+[`blink_lamp.json`](examples/blink_lamp.json) for
+[`blink_lamp.amc`](examples/blink_lamp.amc)). The JSON is only an editor helper
+and is not required by the game.
+
 | Example | What it shows |
 | ------- | ------------- |
 | [blink_lamp.amc](examples/blink_lamp.amc) | Tick counter, global state, toggling a `bool` input. |
@@ -591,5 +626,7 @@ state.
 
 - `analogue` semantics and `null` handling.
 - String manipulation beyond `len` and `==` (there is no concatenation).
-- Databus `in` / `out` names and types, which the user supplies.
+- Databus `in` / `out` names and types, which the user supplies. The optional
+  same-basename `.json` is only an editor helper and is not required by the
+  game.
 - Language features are subjects to change, expect errors and corrections by user.

@@ -1,0 +1,9 @@
+{
+    "in": {
+        "Beacon.is_on": {
+            "type": "bool",
+            "description": "true turns the beacon on"
+        }
+    },
+    "out": {}
+}

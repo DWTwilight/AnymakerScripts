@@ -1,0 +1,9 @@
+{
+    "in": {
+        "Lamp.is_on": {
+            "type": "bool",
+            "description": "true turns the lamp on, false turns it off"
+        }
+    },
+    "out": {}
+}
