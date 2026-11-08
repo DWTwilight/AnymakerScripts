@@ -1,5 +1,16 @@
 # Golf GTI MK8 Scripting Context
 
+## Shared Globals(make sure gets updated first before use)
+
+Globals declared at the top of the script, shared between functions:
+
+- powerState
+  - Integer
+  - Power/lights state machine, owned by Power & Lights, read by Engine
+  - 0 -> off
+  - 1 -> Main Power On
+  - 2 -> Engine Start (and Main Power On)
+
 ## Doors and Locks
 
 ### Databus Inputs (Out Variables)
@@ -85,10 +96,11 @@ Latch is open if handle is active and not locked
 
 ### Logic
 
-For this part, a global state var is needed:
+This part owns the global state var `powerState`, declared at the top of the
+script so it can be shared with the Engine logic:
 
 ```txt
-Power_State
+powerState
 
 0 -> off
 1 -> Main Power On, turn on ASM_Power_Main
@@ -129,21 +141,21 @@ Power_State
 Global state:
 
 ```txt
-Power_State         # from Power & Lights
+powerState         # declared at top of script, owned by Power & Lights
 
 IDLE_RPS = 13.5
 STARTER_CUTOFF_RPS = 6.5
 MIN_IDLE_THROTTLE = 0.05
 ```
 
-- If `Power_State` is not 2:
+- If `powerState` is not 2:
   - set `ASM_Power_Starter.input` -> 0.0
   - set `ASM_Throttle.input` -> 0.0
-- else `Power_State` is 2:
+- else `powerState` is 2:
   - Starter Logic:
     - set `ASM_Power_Starter.input` -> 1.0 if `Engine.rps < STARTER_CUTOFF_RPS`, else 0.0
     - no latch needed: once RPS reaches 6.5 the starter cuts, and the throttle below stays at 1.0 until RPS > 8.5, so the engine keeps accelerating instead of chattering
-  - Throttle Logic (always evaluated while `Power_State` is 2):
+  - Throttle Logic (always evaluated while `powerState` is 2):
     1. calculate minimal throttle to keep idle (anti-stall), constant global `IDLE_RPS` (13.5)
        - `minimalThrottle = (IDLE_RPS - Engine.rps) * 0.2`
        - clamp `minimalThrottle` to `[MIN_IDLE_THROTTLE, 1.0]`
@@ -187,3 +199,11 @@ Constants:
 Sign convention (physical left/right wheels): positive turns toward that wheel's
 side. A right turn gives `Right = +inner`, `Left = -outer`; a left turn gives
 `Left = +inner`, `Right = -outer`; straight gives both 0.
+
+## Break
+
+### Databus Inputs (Out Variables)
+
+- Steering_Wheel.left_pedal
+  - Fractional
+  - Break input, 0(no break) -> 1(full break)

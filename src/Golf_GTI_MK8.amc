@@ -1,3 +1,12 @@
+# Shared Globals
+
+# power & lights state
+# 0 -> off
+# 1 -> main switch on
+# 2 -> engine on
+define var integer powerState
+var powerState = 0
+
 # bool -> 1.0 / 0.0
 define function bool_to_fraction (bool value, fractional result)
 {
@@ -29,12 +38,7 @@ define function clamp (fractional inputValue, fractional minValue, fractional ma
 }
 
 # power & lights state
-# 0 -> off
-# 1 -> main switch on
-# 2 -> engine on
-define var integer powerState
 define var bool lastStartPressed
-var powerState = 0
 var lastStartPressed = false
 
 # power state machine
