@@ -20,13 +20,13 @@ actually hosts the folder:
 2. Install into Windows VS Code (local folder):
 
    ```sh
-   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.12.0.vsix")" --force
+   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.13.0.vsix")" --force
    ```
 
    Or, inside a Remote-WSL window, use the integrated terminal:
 
    ```sh
-   code --install-extension "$PWD/anymaker-scripting-0.12.0.vsix" --force
+   code --install-extension "$PWD/anymaker-scripting-0.13.0.vsix" --force
    ```
 
 3. Reload VS Code.
@@ -97,7 +97,8 @@ the script and validates the language rules, including:
 
 - declaration forms (`define var` with no initializer, `define list` element
   types, top-level-only `type`/`function`, `member` only inside a type)
-- reserved keyword names, duplicate names, and no shadowing
+- reserved keyword names; duplicate names in the same scope are errors, while
+  reusing a name across scopes (shadowing) is a warning
 - `elseif` spelling, semicolons, `!=`, `+=`, `++`, `.5`, `1e3`, unsupported
   loops (`while`/`for`) and `break`/`continue`/`return`
 - undeclared variables/params and use of parameters via the wrong keyword

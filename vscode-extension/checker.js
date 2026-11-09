@@ -61,10 +61,11 @@ class Checker {
     this.globals = new Map();
     this.functions = new Map();
     this.types = new Map();
-    this.allNames = new Map();
+    this.declarationsByName = new Map();
     this.onTickTokens = [];
 
     this.scopes = [];
+    this.scopeCounter = 0;
     this.pos = 0;
     this.currentFunction = null;
   }
@@ -152,16 +153,32 @@ class Checker {
     }
   }
 
-  addName(name, token) {
+  registerName(name, token, scopeKey, kind) {
     if (RESERVED.has(name)) {
       this.reportAt(token, `'${name}' is a reserved keyword and cannot be used as a name`);
     }
-    if (this.allNames.has(name)) {
-      const first = this.allNames.get(name);
-      this.reportAt(token, `'${name}' is already declared (first at line ${this.lineOf(first.start)})`);
-    } else {
-      this.allNames.set(name, token);
+
+    const existing = this.declarationsByName.get(name);
+    if (!existing) {
+      this.declarationsByName.set(name, [{ token, scopeKey, kind }]);
+      return;
     }
+
+    const sameScope = existing.find((declaration) => declaration.scopeKey === scopeKey);
+    if (sameScope) {
+      this.reportAt(
+        token,
+        `'${name}' is already declared in this scope (first at line ${this.lineOf(sameScope.token.start)})`
+      );
+    } else {
+      const first = existing[0];
+      this.reportAt(
+        token,
+        `'${name}' is also declared at line ${this.lineOf(first.token.start)}; reusing a name across scopes works but is discouraged`,
+        'warning'
+      );
+    }
+    existing.push({ token, scopeKey, kind });
   }
 
   collectTopLevel() {
@@ -208,7 +225,7 @@ class Checker {
         const typeTok = tokens[i + 2];
         const nameTok = tokens[i + 3];
         if (typeTok && nameTok && typeTok.type === 'ident' && nameTok.type === 'ident') {
-          this.addName(nameTok.value, nameTok);
+          this.registerName(nameTok.value, nameTok, 'global', 'global');
           const type = kw.value === 'list' ? `list<${typeTok.value}>` : typeTok.value;
           this.globals.set(nameTok.value, {
             type,
@@ -224,7 +241,7 @@ class Checker {
       if (kw.value === 'type') {
         const nameTok = tokens[i + 2];
         if (nameTok && nameTok.type === 'ident') {
-          this.addName(nameTok.value, nameTok);
+          this.registerName(nameTok.value, nameTok, 'global', 'type');
           const members = new Map();
           let j = i + 3;
           while (j < tokens.length && tokens[j].value !== '{') j++;
@@ -253,7 +270,7 @@ class Checker {
                   continue;
                 }
                 if (mtype && mname && mtype.type === 'ident' && mname.type === 'ident') {
-                  this.addName(mname.value, mname);
+                  this.registerName(mname.value, mname, `type:${nameTok.value}`, 'member');
                   members.set(mname.value, { type: mtype.value, token: mname, typeToken: mtype });
                   j += 4;
                   continue;
@@ -273,7 +290,7 @@ class Checker {
       if (kw.value === 'function') {
         const nameTok = tokens[i + 2];
         if (nameTok && nameTok.type === 'ident') {
-          this.addName(nameTok.value, nameTok);
+          this.registerName(nameTok.value, nameTok, 'global', 'function');
           const params = [];
           const paramMap = new Map();
           let j = i + 3;
@@ -283,7 +300,7 @@ class Checker {
               const ptype = tokens[j];
               const pname = tokens[j + 1];
               if (ptype && pname && ptype.type === 'ident' && pname.type === 'ident') {
-                this.addName(pname.value, pname);
+                this.registerName(pname.value, pname, `function:${nameTok.value}`, 'param');
                 const param = { name: pname.value, type: ptype.value, token: pname, typeToken: ptype };
                 params.push(param);
                 paramMap.set(pname.value, param);
@@ -398,7 +415,7 @@ class Checker {
     for (const [name, info] of this.globals) {
       globalVars.set(name, { type: info.type, kind: 'global', token: info.token });
     }
-    this.scopes = [{ kind: 'global', vars: globalVars }];
+    this.scopes = [{ kind: 'global', key: 'global', vars: globalVars }];
     this.pos = 0;
     while (!this.atEnd()) {
       const before = this.pos;
@@ -442,8 +459,8 @@ class Checker {
     return !!t && t.type === 'ident';
   }
 
-  pushScope(kind) {
-    this.scopes.push({ kind, vars: new Map() });
+  pushScope(kind, key) {
+    this.scopes.push({ kind, key: key || `block:${this.scopeCounter++}`, vars: new Map() });
   }
 
   popScope() {
@@ -463,15 +480,7 @@ class Checker {
   }
 
   declareLocal(name, type, token) {
-    if (RESERVED.has(name)) {
-      this.reportAt(token, `'${name}' is a reserved keyword and cannot be used as a name`);
-    }
-    if (this.allNames.has(name)) {
-      const first = this.allNames.get(name);
-      this.reportAt(token, `'${name}' is already declared (first at line ${this.lineOf(first.start)})`);
-    } else {
-      this.allNames.set(name, token);
-    }
+    this.registerName(name, token, this.currentScope().key, 'local');
     this.currentScope().vars.set(name, { type, kind: 'local', token });
   }
 
@@ -617,7 +626,7 @@ class Checker {
 
     const previous = this.currentFunction;
     this.currentFunction = nameTok.value;
-    this.pushScope('function');
+    this.pushScope('function', `function:${nameTok.value}`);
     if (info) {
       for (const p of info.params) {
         this.currentScope().vars.set(p.name, { type: p.type, kind: 'param', token: p.token });
@@ -659,12 +668,12 @@ class Checker {
     }
   }
 
-  parseBlockBody(pushScope) {
+  parseBlockBody(pushScope, key) {
     if (!this.match('{')) {
       this.reportAt(this.lastToken(), "expected '{'");
       return;
     }
-    if (pushScope) this.pushScope('block');
+    if (pushScope) this.pushScope('block', key);
     while (!this.atEnd() && !this.check('}')) {
       const before = this.pos;
       this.parseStatement(false);
@@ -982,7 +991,7 @@ class Checker {
   parseOnTick(topLevel) {
     const tok = this.next();
     if (!topLevel) this.reportAt(tok, "'on_tick' must be defined at top level");
-    this.parseBlockBody(true);
+    this.parseBlockBody(true, 'ontick');
   }
 
   skipExpressionish() {
