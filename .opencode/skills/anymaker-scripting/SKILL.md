@@ -15,6 +15,9 @@ see [Practical examples](#practical-examples).
 - **Never intentionally do dangerous operations** (divide by zero, index out of
   range). Guard the input first.
 - **Do not code around unlikely cases.** Handle them when they actually arise.
+- **Guard databus access with `requires`.** An `in`/`out` variable can be missing
+  at runtime (for example, the object was destroyed); reading or writing it
+  unguarded can fail the whole script.
 
 ## Script organization
 
@@ -115,7 +118,7 @@ define var analogue anaVal
 
 - `define var` takes **no initializer**; `define var integer i = 0` is invalid.
 - Declarations may follow other statements in the same block, but a name may be
-  declared only once per block; duplicates are rejected.
+  declared only once per scope; duplicates in the same scope are rejected.
 
 ### Naming rules
 
@@ -123,16 +126,21 @@ define var analogue anaVal
    they cannot be variables, parameters, functions, or type names. Known
    keywords: `bool`, `integer`, `fractional`, `string`, `analogue`, `list`,
    `type`, `member`, `define`, `var`, `param`, `function`, `call`, `on_tick`,
-   `in`, `out`, `if`, `elseif`, `else`, `repeat`, `true`, `false`, `contains`.
-2. **Never reuse a name.** Give every variable, parameter, function, type, and
-   member a unique name — no shadowing, no duplicate members across types.
+   `in`, `out`, `if`, `elseif`, `else`, `repeat`, `true`, `false`, `contains`,
+   `requires`.
+2. **Do not reuse a name in the same scope.** Two variables, parameters,
+   functions, types, or members with the same name in the same scope are a hard
+   error. Reusing a name in a *different* scope (shadowing) is expected to work,
+   but is discouraged and should be avoided; the checker reports it as a
+   warning.
 3. **Naming convention.** Use `camelCase` for ordinary variables, parameters,
    functions, and members. Use `SCREAMING_SNAKE_CASE` for constants — global
    tuning values that are initialized once and never reassigned (e.g.
    `WHEEL_BASE`, `IDLE_RPS`, `STEER_DEAD_ZONE`). Constants are still ordinary
    variables to the language; the convention is stylistic.
 
-Treat these rules as absolute even if the parser sometimes accepts a violation.
+Reserved keywords and same-scope duplicates are hard errors. Cross-scope reuse
+is allowed but warned; prefer unique names everywhere.
 
 ### Assignment
 
@@ -284,8 +292,9 @@ are fine inline: `atan (var WHEEL_BASE / (var radius + var TRACK_WIDTH * 0.5))`.
 Declarations inside `if` / `elseif` / `else` / `repeat` are scoped to that
 block. Declare in the enclosing scope if the variable must outlive the block.
 
-**Do not shadow.** Reusing an outer name in a nested block is unsafe: the inner
-declaration can take over the name, and the effect persists after the block.
+**Avoid shadowing.** Reusing an outer name in a nested block is expected to
+work, but it is discouraged and ambiguous to read. Prefer unique names; the
+checker reports cross-scope reuse as a warning.
 
 ## Event blocks / entrypoint
 
@@ -387,6 +396,7 @@ outside the script. They are never declared and are used directly with the `in`
   `FL_Door_Handle_Outer.is_active`. Their availability and types depend on the
   databus; names and types are supplied by the user, so never invent them. They
   may optionally be recorded in a same-basename `.json` editor helper (below).
+  Guard access with `requires` (below); a missing variable can fail the script.
 
 ```
 in <inputPath> = <value>
@@ -405,6 +415,31 @@ on_tick
 
 Put such statements in `on_tick` to copy each tick, or in global code for a
 one-time copy.
+
+### requires guard blocks
+
+Use `requires` to guard code that depends on a databus variable being available
+(non-null). The block runs only when the named `in` / `out` variable is present:
+
+```
+requires (out Btn_Start_Stop.is_pressed)
+{
+	if (out Btn_Start_Stop.is_pressed && ! (var lastStartPressed))
+	{
+		# ...
+	}
+}
+```
+
+- The condition is a single databus variable: `requires (out <path>)` or
+  `requires (in <path>)`. It is an availability check, not a bool expression.
+- The body is a normal block with its own scope; declarations inside do not
+  escape it.
+- Use it before reading an `out` value or writing an `in` value. This is the
+  recommended pattern: a missing/destroyed databus variable can fail the whole
+  script, so guard every access.
+- The AnyMaker Scripting VS Code extension warns about `in`/`out` use that is
+  not inside a matching `requires` block.
 
 ### Optional databus schema (editor helper only)
 
@@ -640,11 +675,16 @@ Every example has a companion same-basename databus schema (e.g.,
 [`blink_lamp.amc`](examples/blink_lamp.amc)). The JSON is only an editor helper
 and is not required by the game.
 
+Most examples omit `requires` guards for brevity, so the checker reports
+unchecked databus warnings for them. [`requires_guard.amc`](examples/requires_guard.amc)
+shows the recommended guarded form.
+
 | Example | What it shows |
 | ------- | ------------- |
 | [blink_lamp.amc](examples/blink_lamp.amc) | Tick counter, global state, toggling a `bool` input. |
 | [edge_counter.amc](examples/edge_counter.amc) | Edge detection, incrementing a counter output. |
 | [fade_lamp.amc](examples/fade_lamp.amc) | Fractional ramping, clamping, function with an output param. |
+| [requires_guard.amc](examples/requires_guard.amc) | `requires` databus availability guard. |
 | [thermostat.amc](examples/thermostat.amc) | Hysteresis control loop with two thresholds. |
 | [traffic_light.amc](examples/traffic_light.amc) | Multi-phase state machine, custom-type config, combined `bool` expressions. |
 | [smooth_sensor.amc](examples/smooth_sensor.amc) | Global list, sliding window, `len`, literal indexing, averaging function. |
@@ -658,7 +698,7 @@ state.
 
 ## Out of scope
 
-- `analogue` semantics and `null` handling.
+- `analogue` semantics; `requires` covers databus availability (null) checks.
 - String manipulation beyond `len` and `==` (there is no concatenation).
 - Databus `in` / `out` names and types, which the user supplies. The optional
   same-basename `.json` is only an editor helper and is not required by the

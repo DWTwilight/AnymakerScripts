@@ -1,0 +1,14 @@
+{
+    "in": {
+        "Lamp.level": {
+            "type": "fractional",
+            "description": "Lamp brightness level, 0.0 to 1.0"
+        }
+    },
+    "out": {
+        "Sensor.raw": {
+            "type": "fractional",
+            "description": "Raw sensor value"
+        }
+    }
+}

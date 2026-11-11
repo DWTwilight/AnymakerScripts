@@ -1,0 +1,15 @@
+# requires availability guard
+# bind Sensor.raw, Lamp.level
+define var fractional level
+var level = 0.0
+on_tick
+{
+	requires (out Sensor.raw)
+	{
+		requires (in Lamp.level)
+		{
+			var level = out Sensor.raw
+			in Lamp.level = var level
+		}
+	}
+}
