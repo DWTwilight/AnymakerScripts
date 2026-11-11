@@ -49,6 +49,46 @@ function computeLineStarts(text) {
   return starts;
 }
 
+function levenshtein(a, b) {
+  const rows = a.length + 1;
+  const columns = b.length + 1;
+  const distance = Array.from({ length: rows }, () => new Array(columns).fill(0));
+  for (let i = 0; i < rows; i++) distance[i][0] = i;
+  for (let j = 0; j < columns; j++) distance[0][j] = j;
+  for (let i = 1; i < rows; i++) {
+    for (let j = 1; j < columns; j++) {
+      distance[i][j] =
+        a[i - 1] === b[j - 1]
+          ? distance[i - 1][j - 1]
+          : 1 + Math.min(distance[i - 1][j], distance[i][j - 1], distance[i - 1][j - 1]);
+    }
+  }
+  return distance[a.length][b.length];
+}
+
+function tokenKey(path) {
+  return path.split(/[._]/).sort().join('\u0000');
+}
+
+function closestKey(path, keys) {
+  const target = tokenKey(path);
+  const reordered = keys.find((key) => tokenKey(key) === target);
+  if (reordered) return reordered;
+
+  let best = null;
+  let bestDistance = Infinity;
+  for (const key of keys) {
+    const distance = levenshtein(path, key);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = key;
+    }
+  }
+  if (best === null) return null;
+  const threshold = Math.max(3, Math.floor(path.length / 3));
+  return bestDistance <= threshold ? best : null;
+}
+
 class Checker {
   constructor(text, schema) {
     this.text = text;
@@ -666,6 +706,7 @@ class Checker {
       this.reportAt(this.lastToken(), "expected '{'");
       return;
     }
+    this.checkBlockBrace();
     let depth = 0;
     while (!this.atEnd()) {
       const t = this.next();
@@ -677,7 +718,29 @@ class Checker {
     }
   }
 
+  checkBlockBrace() {
+    const brace = this.peek();
+    if (!brace || brace.value !== '{') return;
+    const previous = this.lastToken();
+    if (!previous) return;
+    if (this.lineOf(previous.start) !== this.lineOf(brace.start)) return;
+
+    const between = this.text.slice(previous.end, brace.start);
+    const extra = { code: 'brace-newline' };
+    if (/^[ \t]*$/.test(between)) {
+      const lineStart = this.text.lastIndexOf('\n', previous.start - 1) + 1;
+      const indentMatch = this.text.slice(lineStart, previous.start).match(/^[ \t]*/);
+      const indent = indentMatch ? indentMatch[0] : '';
+      extra.fix = {
+        title: "Put '{' on a new line",
+        edits: [{ start: previous.end, end: brace.start, newText: `\n${indent}` }],
+      };
+    }
+    this.reportAt(brace, "the '{' must be on a new line", 'error', extra);
+  }
+
   parseBlockBody(pushScope, key) {
+    this.checkBlockBrace();
     if (!this.match('{')) {
       this.reportAt(this.lastToken(), "expected '{'");
       return;
@@ -887,7 +950,16 @@ class Checker {
         `databus path '${path}' is an '${otherDirection}' variable; use '${otherDirection} ${path}'`
       );
     } else {
-      this.reportAt(token, `unknown databus '${direction}' path '${path}'`);
+      const suggestion = closestKey(path, Object.keys(own));
+      const hint = suggestion ? ` Did you mean '${suggestion}'?` : '';
+      const extra = { code: 'unknown-databus' };
+      if (suggestion) {
+        extra.fix = {
+          title: `Change to '${suggestion}'`,
+          edits: [{ start: first.start, end: last.end, newText: suggestion }],
+        };
+      }
+      this.reportAt(token, `unknown databus '${direction}' path '${path}'.${hint}`, 'error', extra);
     }
     return null;
   }

@@ -260,7 +260,8 @@ define function transmission_on_tick ()
 					var targetGear = 1
 				}
 			}
-			else {
+			else
+			{
 				# already in manual
 				# paddle shifts (manual only)
 				define var bool paddleUp

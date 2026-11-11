@@ -33,8 +33,11 @@ async function loadSchema(document) {
   const key = uri.toString();
   if (cache.has(key)) return cache.get(key);
   try {
-    const data = await vscode.workspace.fs.readFile(uri);
-    const parsed = JSON.parse(Buffer.from(data).toString('utf8'));
+    const open = vscode.workspace.textDocuments.find((doc) => doc.uri.toString() === key);
+    const text = open
+      ? open.getText()
+      : Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
+    const parsed = JSON.parse(text);
     if (!parsed || typeof parsed !== 'object') {
       cache.set(key, null);
       return null;

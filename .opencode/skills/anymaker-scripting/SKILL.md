@@ -18,6 +18,10 @@ see [Practical examples](#practical-examples).
 - **Guard databus access with `requires`.** An `in`/`out` variable can be missing
   at runtime (for example, the object was destroyed); reading or writing it
   unguarded can fail the whole script.
+- **Opening braces go on their own line.** Write `{` on the line after the
+  header (`if (...)`, `else`, `elseif (...)`, `repeat (...)`, `on_tick`,
+  `requires (...)`, `define function ...`, `define type ...`). A `{` on the same
+  line as the header is invalid.
 
 ## Script organization
 
@@ -626,6 +630,8 @@ else
 
 - `elseif` is one word (not `else if`).
 - `else` takes no condition.
+- Every block-opening `{` goes on its own line: write `if (...)` then `{`, and
+  `else` then `{`. `if (...) {` and `else {` on the same line are invalid.
 - Each branch body is wrapped in `{ }`.
 
 ## Loops

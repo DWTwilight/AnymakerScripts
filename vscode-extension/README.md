@@ -20,13 +20,13 @@ actually hosts the folder:
 2. Install into Windows VS Code (local folder):
 
    ```sh
-   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.15.0.vsix")" --force
+   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.17.0.vsix")" --force
    ```
 
    Or, inside a Remote-WSL window, use the integrated terminal:
 
    ```sh
-   code --install-extension "$PWD/anymaker-scripting-0.15.0.vsix" --force
+   code --install-extension "$PWD/anymaker-scripting-0.17.0.vsix" --force
    ```
 
 3. Reload VS Code.
@@ -104,6 +104,10 @@ the script and validates the language rules, including:
   reusing a name across scopes (shadowing) is a warning
 - `elseif` spelling, semicolons, `!=`, `+=`, `++`, `.5`, `1e3`, unsupported
   loops (`while`/`for`) and `break`/`continue`/`return`
+- block-opening `{` on the same line as its header (e.g. `else {`,
+  `if (...) {`, `on_tick {`); the `{` must be on the next line
+- unknown databus paths, with a “Did you mean …?” suggestion when a near match
+  exists in the schema
 - undeclared variables/params and use of parameters via the wrong keyword
 - list rules (read-only elements, no list literals, no `==` on lists, no list
   members, `contains` only on lists)
@@ -129,6 +133,8 @@ Fixes offered from the lightbulb / `Ctrl+.`:
 - remove a `define var` initializer
 - add an empty `on_tick` block
 - insert spacing for `!(` and `abs(` style calls
+- move a block-opening `{` to a new line
+- fix a near-miss databus path from the “Did you mean …?” suggestion
 
 ## Snippets
 
