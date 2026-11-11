@@ -56,6 +56,22 @@
             "type": "fractional",
             "description": "Actual engine throttle input, 0 (no throttle) -> 1 (full throttle)"
         },
+        "ASM_Brake_FL.input": {
+            "type": "fractional",
+            "description": "FL brake force, 0 (no brake) -> 1 (full brake)"
+        },
+        "ASM_Brake_FR.input": {
+            "type": "fractional",
+            "description": "FR brake force, 0 (no brake) -> 1 (full brake)"
+        },
+        "ASM_Brake_RL.input": {
+            "type": "fractional",
+            "description": "RL brake force, 0 (no brake) -> 1 (full brake)"
+        },
+        "ASM_Brake_RR.input": {
+            "type": "fractional",
+            "description": "RR brake force, 0 (no brake) -> 1 (full brake)"
+        },
         "ASM_Steering_Left.input": {
             "type": "fractional",
             "description": "Steering left input (-1 to 1), 1 is turning left"

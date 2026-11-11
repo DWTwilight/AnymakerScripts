@@ -202,8 +202,43 @@ side. A right turn gives `Right = +inner`, `Left = -outer`; a left turn gives
 
 ## Break
 
+TODO:
+- ABS
+- Handbrake
+- Autohold
+
 ### Databus Inputs (Out Variables)
 
 - Steering_Wheel.left_pedal
   - Fractional
   - Break input, 0(no break) -> 1(full break)
+- Wheel_FL.rps
+  - Fractional
+  - FL Wheel rps
+- Wheel_FR.rps
+  - Fractional
+  - FR Wheel rps
+- Wheel_RL.rps
+  - Fractional
+  - RL Wheel rps
+- Wheel_RR.rps
+  - Fractional
+  - RR Wheel rps
+
+### Databus Outputs (In Variables)
+
+- ASM_Brake_FL.input
+  - Fractional
+  - FL brake force, 0(no brake) -> 1(full brake)
+- ASM_Brake_FR.input
+  - Fractional
+  - FR brake force, 0(no brake) -> 1(full brake)
+- ASM_Brake_RL.input
+  - Fractional
+  - RL brake force, 0(no brake) -> 1(full brake)
+- ASM_Brake_RR.input
+  - Fractional
+  - RR brake force, 0(no brake) -> 1(full brake)
+
+### Logic
+

@@ -188,6 +188,35 @@ define function engine_on_tick ()
 	}
 }
 
+# brake logic
+define function brake_on_tick ()
+{
+	define var fractional brakeValue
+	var brakeValue = 0.0
+
+	requires (out Steering_Wheel.left_pedal)
+	{
+		call clamp (out Steering_Wheel.left_pedal, 0.0, 1.0, var brakeValue)
+	}
+
+	requires (in ASM_Brake_FL.input)
+	{
+		in ASM_Brake_FL.input = var brakeValue
+	}
+	requires (in ASM_Brake_FR.input)
+	{
+		in ASM_Brake_FR.input = var brakeValue
+	}
+	requires (in ASM_Brake_RL.input)
+	{
+		in ASM_Brake_RL.input = var brakeValue
+	}
+	requires (in ASM_Brake_RR.input)
+	{
+		in ASM_Brake_RR.input = var brakeValue
+	}
+}
+
 # ackermann steering logic
 define function steering_on_tick ()
 {
@@ -306,6 +335,7 @@ on_tick
 {
 	call power_on_tick ()
 	call engine_on_tick ()
+	call brake_on_tick ()
 	call steering_on_tick ()
 	call door_lock_on_tick ()
 }
