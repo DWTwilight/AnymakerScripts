@@ -20,13 +20,13 @@ actually hosts the folder:
 2. Install into Windows VS Code (local folder):
 
    ```sh
-   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.17.0.vsix")" --force
+   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.19.0.vsix")" --force
    ```
 
    Or, inside a Remote-WSL window, use the integrated terminal:
 
    ```sh
-   code --install-extension "$PWD/anymaker-scripting-0.17.0.vsix" --force
+   code --install-extension "$PWD/anymaker-scripting-0.19.0.vsix" --force
    ```
 
 3. Reload VS Code.
@@ -162,6 +162,12 @@ Pressing `Enter` after a line ending in `{` indents the next line, and a line
 that starts with `}` outdents. The editor's normal indent settings (tabs or
 spaces) are respected.
 
+## Formatting
+
+`Format Document` re-indents using `{` / `}` nesting and trims trailing
+whitespace. It respects the editor's tabs/spaces and tab-size settings. It does
+not move braces or otherwise change code layout.
+
 ## Hover
 
 Hover a built-in, type, keyword, or declared symbol to see a syntax-highlighted
@@ -186,8 +192,11 @@ signature and a short description.
 - **Completion**: keywords and declaration kinds after `define`; valid types in
   type positions (including function signatures); variables after `var`;
   parameters after `param`; functions after `call`; members after `.`; databus
-  paths (with type/description) after `in`/`out`; and a general list of
-  builtins, types, and in-scope symbols elsewhere.
+  paths (with type/description) after `in`/`out` (they pop up automatically
+  after the space); and a general list of builtins, types, and in-scope symbols
+  elsewhere. Typing a bare name completes the required prefix, e.g. `Btn` →
+  `out Btn_Start_Stop.is_pressed`, `pow` → `var powerState`, `res` →
+  `param result`, `clamp` → `call clamp (...)`.
 - **Signature help**: parameter hints for `call f (` and for builtins such as
   `rand (`, `atan (`, and `to_integer (`. Tracks the active parameter across
   commas.

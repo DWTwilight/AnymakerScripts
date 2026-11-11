@@ -129,13 +129,23 @@ function completionContext(model, anchor) {
   if (token.value === 'call') return { kind: 'functions' };
   if (token.value === 'in' || token.value === 'out') return { kind: 'databus' };
 
+  const requires = requiresContext(model, anchor);
+  if (requires) return requires;
+
   const signature = signatureTypeContext(model, anchor);
   if (signature) return signature;
 
   return { kind: 'generic' };
 }
 
-function completionItems(model, offset, context) {
+function requiresContext(model, anchor) {
+  const open = openParenBefore(model.tokens, anchor);
+  if (!open) return null;
+  const nameTok = model.tokens[open.index - 1];
+  return nameTok && nameTok.value === 'requires' ? { kind: 'requires' } : null;
+}
+
+function completionItems(model, offset, context, schema) {
   const items = [];
   const seen = new Set();
   const add = (item) => {
@@ -205,6 +215,50 @@ function completionItems(model, offset, context) {
     }
   };
 
+  const addDatabusReferences = () => {
+    if (!schema) return;
+    for (const direction of ['in', 'out']) {
+      const entries = schema[direction] || {};
+      for (const [path, info] of Object.entries(entries)) {
+        const item = new vscode.CompletionItem(
+          `${direction} ${path}`,
+          vscode.CompletionItemKind.Value
+        );
+        item.filterText = path;
+        item.insertText = `${direction} ${path}`;
+        if (info && info.type) item.detail = info.type;
+        if (info && info.description) item.documentation = new vscode.MarkdownString(info.description);
+        add(item);
+      }
+    }
+  };
+
+  const addReferences = () => {
+    for (const decl of model.declarations) {
+      if (!scopeContains(decl, offset)) continue;
+      if (decl.kind === 'global' || decl.kind === 'local') {
+        const item = new vscode.CompletionItem(`var ${decl.name}`, vscode.CompletionItemKind.Variable);
+        item.filterText = decl.name;
+        item.insertText = `var ${decl.name}`;
+        if (decl.type) item.detail = decl.type;
+        add(item);
+      } else if (decl.kind === 'param') {
+        const item = new vscode.CompletionItem(`param ${decl.name}`, vscode.CompletionItemKind.Variable);
+        item.filterText = decl.name;
+        item.insertText = `param ${decl.name}`;
+        if (decl.type) item.detail = decl.type;
+        add(item);
+      } else if (decl.kind === 'function') {
+        const item = new vscode.CompletionItem(`call ${decl.name}`, vscode.CompletionItemKind.Function);
+        item.filterText = decl.name;
+        item.insertText = new vscode.SnippetString(`call ${decl.name} ($0)`);
+        item.detail = 'function';
+        add(item);
+      }
+    }
+    addDatabusReferences();
+  };
+
   switch (context.kind) {
     case 'decl':
       addDeclKeywords();
@@ -226,11 +280,16 @@ function completionItems(model, offset, context) {
       break;
     case 'databus':
       break;
+    case 'requires':
+      add(new vscode.CompletionItem('in', vscode.CompletionItemKind.Keyword));
+      add(new vscode.CompletionItem('out', vscode.CompletionItemKind.Keyword));
+      addDatabusReferences();
+      break;
     default:
       addKeywords();
       addTypes();
       addBuiltins();
-      addSymbols((decl) => decl.kind !== 'member');
+      addReferences();
   }
 
   return items;
@@ -254,7 +313,7 @@ async function databusCompletions(document, position, context) {
   return new vscode.CompletionList(items, false);
 }
 
-async function provideCompletionItems(document, position) {
+async function provideCompletionItems(document, position, token, context) {
   const model = getModel(document);
   const offset = document.offsetAt(position);
   if (isInCommentOrString(model, offset)) return undefined;
@@ -262,8 +321,18 @@ async function provideCompletionItems(document, position) {
   const wordRange = document.getWordRangeAtPosition(position, WORD_RE);
   const anchor = wordRange ? document.offsetAt(wordRange.start) : offset;
   const before = lastToken(model.tokens, anchor).token;
-
   const databus = databusContextAt(model, offset);
+
+  const spaceTriggered =
+    context &&
+    context.triggerKind === vscode.CompletionTriggerKind.TriggerCharacter &&
+    context.triggerCharacter === ' ';
+  if (spaceTriggered) {
+    const startsDatabus = before && (before.value === 'in' || before.value === 'out');
+    if (!startsDatabus || !databus) return undefined;
+    return databusCompletions(document, position, databus);
+  }
+
   if (databus) {
     const wanted =
       databus.inPath ||
@@ -271,8 +340,12 @@ async function provideCompletionItems(document, position) {
     if (wanted) return databusCompletions(document, position, databus);
   }
 
-  const context = completionContext(model, anchor);
-  return new vscode.CompletionList(completionItems(model, offset, context), false);
+  const completion = completionContext(model, anchor);
+  const schema =
+    completion.kind === 'generic' || completion.kind === 'requires'
+      ? await loadSchema(document)
+      : null;
+  return new vscode.CompletionList(completionItems(model, offset, completion, schema), false);
 }
 
 function provideSignatureHelp(document, position) {
@@ -402,7 +475,7 @@ function provideRenameEdits(document, position, newName) {
 
 function registerIntellisense() {
   return [
-    vscode.languages.registerCompletionItemProvider('anymaker', { provideCompletionItems }, '.'),
+    vscode.languages.registerCompletionItemProvider('anymaker', { provideCompletionItems }, '.', ' '),
     vscode.languages.registerSignatureHelpProvider('anymaker', { provideSignatureHelp }, '(', ','),
     vscode.languages.registerDefinitionProvider('anymaker', { provideDefinition }),
     vscode.languages.registerReferenceProvider('anymaker', { provideReferences }),

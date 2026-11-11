@@ -10,6 +10,7 @@ const { registerIntellisense } = require('./intellisense');
 const { getModel, isExcluded, databusContextAt } = require('./model');
 const { loadSchema, clearSchema } = require('./databus');
 const { getConstants, clearConstants } = require('./constants');
+const { formatText } = require('./format');
 
 const SYMBOL_KINDS = {
   function: vscode.SymbolKind.Function,
@@ -342,6 +343,18 @@ function activate(context) {
     }),
     vscode.languages.registerHoverProvider('anymaker', { provideHover }),
     vscode.languages.registerFoldingRangeProvider('anymaker', { provideFoldingRanges }),
+    vscode.languages.registerDocumentFormattingEditProvider('anymaker', {
+      provideDocumentFormattingEdits(document, options) {
+        const original = document.getText();
+        const formatted = formatText(original, options);
+        if (formatted === original) return [];
+        const range = new vscode.Range(
+          document.positionAt(0),
+          document.positionAt(original.length)
+        );
+        return [vscode.TextEdit.replace(range, formatted)];
+      },
+    }),
     vscode.window.onDidChangeVisibleTextEditors(() => updateVisible()),
     vscode.window.onDidChangeActiveTextEditor((editor) => updateEditor(editor)),
     vscode.window.onDidChangeActiveColorTheme(() => {

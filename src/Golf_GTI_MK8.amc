@@ -12,6 +12,10 @@ var STARTER_CUTOFF_RPS = 6.5
 define var fractional MIN_IDLE_THROTTLE
 var MIN_IDLE_THROTTLE = 0.05
 
+# max idle throttle
+define var fractional MAX_IDLE_THROTTLE
+var MAX_IDLE_THROTTLE = 0.3
+
 # wheel base (m)
 define var fractional WHEEL_BASE
 var WHEEL_BASE = 2.72
@@ -38,7 +42,7 @@ var ANTI_STALL_RPS = 9.0
 
 # anti-stall brake release
 define var fractional ANTI_STALL_RECOVER_BRAKE
-var ANTI_STALL_RECOVER_BRAKE = 0.2
+var ANTI_STALL_RECOVER_BRAKE = 0.01
 
 # reverse engage max speed
 define var fractional REVERSE_MAX_WHEEL_RPS
@@ -58,8 +62,8 @@ define var integer targetGear
 var targetGear = 0
 
 # transmission last stick
-define var integer lastStick
-var lastStick = 0
+define var integer lastGearMode
+var lastGearMode = 0
 
 # last paddle value
 define var fractional lastPaddle
@@ -68,6 +72,10 @@ var lastPaddle = 0.0
 # gearbox pulse cooldown
 define var bool gearboxPulseCooldown
 var gearboxPulseCooldown = false
+
+# anti-stall active flag
+define var bool antiStall
+var antiStall = false
 
 # bool -> 1.0 / 0.0
 define function bool_to_fraction (bool value, fractional result)
@@ -193,24 +201,22 @@ define function engine_on_tick ()
 			requires (out Steering_Wheel.right_pedal)
 			{
 				define var fractional rawMinimal
-				define var fractional clampedMinimal
 				define var fractional rawThrottle
 
 				call bool_to_fraction (out Engine.rps < var STARTER_CUTOFF_RPS, var starterValue)
 
-				var rawMinimal = var MIN_IDLE_THROTTLE
+				var rawMinimal = (var IDLE_RPS - out Engine.rps) * 0.2
 				requires (out Steering_Wheel.left_pedal)
 				{
-					if (out Steering_Wheel.left_pedal < var ANTI_STALL_RECOVER_BRAKE)
+					if (! (var targetGear == 0) && (out Steering_Wheel.left_pedal > var ANTI_STALL_RECOVER_BRAKE) && ! (var antiStall))
 					{
-						var rawMinimal = (var IDLE_RPS - out Engine.rps) * 0.2
+						var rawMinimal = var MIN_IDLE_THROTTLE
 					}
 				}
-				call clamp (var rawMinimal, var MIN_IDLE_THROTTLE, 1.0, var clampedMinimal)
-				var rawThrottle = var clampedMinimal
+				call clamp (var rawMinimal, var MIN_IDLE_THROTTLE, var MAX_IDLE_THROTTLE, var rawThrottle)
 				requires (out Gearbox.clutch_factor)
 				{
-					var rawThrottle = var clampedMinimal + (1.0 - var clampedMinimal) * out Steering_Wheel.right_pedal * out Gearbox.clutch_factor
+					var rawThrottle = var rawThrottle + (1.0 - var rawThrottle) * out Steering_Wheel.right_pedal * out Gearbox.clutch_factor
 				}
 				call clamp (var rawThrottle, var MIN_IDLE_THROTTLE, 1.0, var throttleValue)
 			}
@@ -237,26 +243,36 @@ define function transmission_on_tick ()
 		{
 			# neutral
 			var targetGear = 0
+			var antiStall = false
 		}
 		elseif (out Gear_Stick.throttle == 1)
 		{
 			# reverse
+			if (! (var targetGear == -1))
+			{
+				var antiStall = true
+			}
 			var targetGear = -1
 		}
 		elseif (out Gear_Stick.throttle == 2)
 		{
 			# TODO: impl auto mode
+			if (var targetGear < 1)
+			{
+				var antiStall = true
+			}
 			var targetGear = 1
 		}
 		elseif (out Gear_Stick.throttle == 3)
 		{
 			# manual mode
-			if (! (var lastStick == 3))
+			if (! (var lastGearMode == 3))
 			{
 				# from other modes to manual
 				if (var targetGear < 1)
 				{
 					# not drive
+					var antiStall = true
 					var targetGear = 1
 				}
 			}
@@ -268,7 +284,7 @@ define function transmission_on_tick ()
 				define var bool paddleDown
 				var paddleUp = false
 				var paddleDown = false
-				
+
 				requires (out Paddle_Shift.throttle)
 				{
 					var paddleUp = (out Paddle_Shift.throttle > 0.5) && (var lastPaddle <= 0.5)
@@ -293,19 +309,26 @@ define function transmission_on_tick ()
 				}
 			}
 		}
-		var lastStick = out Gear_Stick.throttle
+		var lastGearMode = out Gear_Stick.throttle
 	}
 
-	# anti-stall fake neutral
-	define var bool antiStall
-	var antiStall = false
-	if (! (var targetGear == 0))
+	if (var antiStall)
+	{
+		requires (out Steering_Wheel.left_pedal)
+		{
+			if (out Steering_Wheel.left_pedal < var ANTI_STALL_RECOVER_BRAKE)
+			{
+				var antiStall = false
+			}
+		}
+	}
+	if (! (var targetGear == 0) && ! (var antiStall))
 	{
 		requires (out Engine.rps)
 		{
-			requires (out Steering_Wheel.left_pedal)
+			if (out Engine.rps < var ANTI_STALL_RPS)
 			{
-				var antiStall = (out Engine.rps < var ANTI_STALL_RPS) && (out Steering_Wheel.left_pedal > var ANTI_STALL_RECOVER_BRAKE)
+				var antiStall = true
 			}
 		}
 	}
