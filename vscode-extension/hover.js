@@ -40,6 +40,7 @@ const KEYWORDS = new Map([
   ['else', { signature: 'else { ... }', description: 'Fallback branch with no condition.' }],
   ['repeat', { signature: 'repeat (count) { ... }', description: 'Run the body a fixed number of times. Count must be integer and is re-evaluated every iteration. No break/continue.' }],
   ['contains', { signature: 'list contains value', description: 'List membership test. Only valid on lists; custom values use field-wise equality.' }],
+  ['requires', { signature: 'requires (in|out Path.name) { ... }', description: 'Availability guard: runs the block only when the named databus `in`/`out` variable is present (not null). The condition is a single databus variable, not a bool expression.' }],
   ['true', { signature: 'true', description: 'Boolean literal.' }],
   ['false', { signature: 'false', description: 'Boolean literal.' }],
 ]);

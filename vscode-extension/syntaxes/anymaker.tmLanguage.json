@@ -112,7 +112,7 @@
           "name": "constant.language.boolean.amc"
         },
         {
-          "match": "\\b(if|elseif|else|repeat|contains)\\b",
+          "match": "\\b(if|elseif|else|repeat|contains|requires)\\b",
           "name": "keyword.control.amc"
         },
         {

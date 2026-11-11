@@ -3,7 +3,7 @@
 const RESERVED = new Set([
   'bool', 'integer', 'fractional', 'string', 'analogue', 'list', 'type', 'member',
   'define', 'var', 'param', 'function', 'call', 'on_tick', 'in', 'out', 'if',
-  'elseif', 'else', 'repeat', 'true', 'false', 'contains',
+  'elseif', 'else', 'repeat', 'true', 'false', 'contains', 'requires',
 ]);
 
 const BUILTIN_TYPES = new Set(['bool', 'integer', 'fractional', 'string', 'analogue']);
@@ -68,6 +68,10 @@ class Checker {
     this.scopeCounter = 0;
     this.pos = 0;
     this.currentFunction = null;
+
+    this.guards = [];
+    this.databusWarnings = new Set();
+    this.contextStack = [];
   }
 
   run() {
@@ -416,6 +420,7 @@ class Checker {
       globalVars.set(name, { type: info.type, kind: 'global', token: info.token });
     }
     this.scopes = [{ kind: 'global', key: 'global', vars: globalVars }];
+    this.contextStack = ['global'];
     this.pos = 0;
     while (!this.atEnd()) {
       const before = this.pos;
@@ -505,6 +510,8 @@ class Checker {
           return this.parseRepeat(topLevel);
         case 'on_tick':
           return this.parseOnTick(topLevel);
+        case 'requires':
+          return this.parseRequires();
         case 'out':
           this.reportAt(t, "'out' databus values can only be used inside expressions");
           return this.next();
@@ -632,7 +639,9 @@ class Checker {
         this.currentScope().vars.set(p.name, { type: p.type, kind: 'param', token: p.token });
       }
     }
+    this.contextStack.push(`function:${nameTok.value}`);
     this.parseBlockBody(false);
+    this.contextStack.pop();
     this.currentFunction = previous;
     this.popScope();
   }
@@ -849,6 +858,9 @@ class Checker {
     }
 
     const known = this.schema ? this.validateDatabus('in', path, first, last) : null;
+    if (!this.schema || known) {
+      this.warnUncheckedDatabus('in', path, { start: first.start, end: last.end });
+    }
     let rhs = null;
     if (this.match('=')) {
       rhs = this.parseExpr();
@@ -991,7 +1003,77 @@ class Checker {
   parseOnTick(topLevel) {
     const tok = this.next();
     if (!topLevel) this.reportAt(tok, "'on_tick' must be defined at top level");
+    this.contextStack.push('on_tick');
     this.parseBlockBody(true, 'ontick');
+    this.contextStack.pop();
+  }
+
+  parseRequires() {
+    const requiresTok = this.next();
+    if (!this.match('(')) {
+      this.reportAt(requiresTok, "expected '(' after 'requires'");
+      return;
+    }
+
+    const directionTok = this.peek();
+    if (!this.isIdent(directionTok) || (directionTok.value !== 'in' && directionTok.value !== 'out')) {
+      this.reportAt(directionTok || requiresTok, "requires expects an 'in' or 'out' databus variable");
+      while (!this.atEnd() && !this.check(')')) this.next();
+      this.match(')');
+      this.parseBlockBody(true);
+      return;
+    }
+    this.next();
+
+    const first = this.peek();
+    if (!this.isIdent(first)) {
+      this.reportAt(requiresTok, `expected databus path after '${directionTok.value}'`);
+      while (!this.atEnd() && !this.check(')')) this.next();
+      this.match(')');
+      this.parseBlockBody(true);
+      return;
+    }
+    this.next();
+
+    let path = first.value;
+    let last = first;
+    while (this.check('.')) {
+      this.next();
+      const segment = this.peek();
+      if (!this.isIdent(segment)) {
+        this.reportAt(this.lastToken(), 'expected databus path segment');
+        break;
+      }
+      this.next();
+      path += '.' + segment.value;
+      last = segment;
+    }
+
+    if (this.schema) this.validateDatabus(directionTok.value, path, first, last);
+
+    if (!this.check(')')) {
+      this.reportAt(this.peek() || last, 'requires takes a single databus variable');
+      while (!this.atEnd() && !this.check(')')) this.next();
+    }
+    this.match(')');
+
+    this.guards.push({ direction: directionTok.value, path });
+    this.parseBlockBody(true);
+    this.guards.pop();
+  }
+
+  warnUncheckedDatabus(direction, path, token) {
+    if (this.guards.some((guard) => guard.direction === direction && guard.path === path)) return;
+    const context = this.contextStack[this.contextStack.length - 1] || 'global';
+    const key = `${context}|${direction}|${path}`;
+    if (this.databusWarnings.has(key)) return;
+    this.databusWarnings.add(key);
+    this.reportAt(
+      token,
+      `databus '${direction} ${path}' is used without a 'requires' guard; if it is missing at runtime, the whole script can fail`,
+      'warning',
+      { code: 'unchecked-databus' }
+    );
   }
 
   skipExpressionish() {
@@ -1357,10 +1439,12 @@ class Checker {
       path += '.' + segment.value;
       last = segment;
     }
-    if (!this.schema) return 'unknown';
-    const type = this.validateDatabus('out', path, first, last);
-    if (!type || type === 'analogue') return 'unknown';
-    return type;
+    const known = this.schema ? this.validateDatabus('out', path, first, last) : null;
+    if (!this.schema || known) {
+      this.warnUncheckedDatabus('out', path, { start: first.start, end: last.end });
+    }
+    if (!known || known === 'analogue') return 'unknown';
+    return known;
   }
 
   parseBuiltinCall() {

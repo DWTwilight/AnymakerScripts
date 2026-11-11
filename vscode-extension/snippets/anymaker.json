@@ -65,6 +65,11 @@
     "body": ["repeat (${1:count})", "{", "\t$0", "}"],
     "description": "Repeat loop"
   },
+  "AnyMaker: requires": {
+    "prefix": "requires",
+    "body": ["requires (${1|out,in|} ${2:Path.name})", "{", "\t$0", "}"],
+    "description": "Databus availability guard block"
+  },
   "AnyMaker: call": {
     "prefix": "call",
     "body": ["call ${1:function} (${0})"],

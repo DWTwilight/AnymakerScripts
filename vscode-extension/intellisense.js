@@ -18,7 +18,7 @@ const NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const KEYWORDS = [
   'define', 'var', 'param', 'call', 'if', 'elseif', 'else', 'repeat',
   'contains', 'true', 'false', 'list', 'type', 'member', 'function',
-  'in', 'out', 'on_tick',
+  'in', 'out', 'on_tick', 'requires',
 ];
 const DECL_KEYWORDS = ['var', 'list', 'type', 'member', 'function'];
 

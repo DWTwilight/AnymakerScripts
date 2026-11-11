@@ -20,13 +20,13 @@ actually hosts the folder:
 2. Install into Windows VS Code (local folder):
 
    ```sh
-   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.13.0.vsix")" --force
+   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.15.0.vsix")" --force
    ```
 
    Or, inside a Remote-WSL window, use the integrated terminal:
 
    ```sh
-   code --install-extension "$PWD/anymaker-scripting-0.13.0.vsix" --force
+   code --install-extension "$PWD/anymaker-scripting-0.15.0.vsix" --force
    ```
 
 3. Reload VS Code.
@@ -63,6 +63,9 @@ The schema drives validation (unknown paths, wrong direction, type mismatches),
 completion after `in`/`out`, and hover type/description. Edits to the JSON are
 picked up live.
 
+Guard databus access with `requires (in|out Path.name) { ... }`; a missing or
+destroyed variable can fail the whole script.
+
 ## Scope-aware colors
 
 On top of the TextMate grammar, a small analyzer classifies identifiers by scope
@@ -86,7 +89,7 @@ Colors adapt to the active dark/light/high-contrast theme.
 - Built-in types (`bool`, `integer`, `fractional`, `string`, `analogue`)
 - `in` / `out` databus paths
 - `param`, `call`, `var` references
-- Control flow (`if`, `elseif`, `else`, `repeat`, `contains`, `on_tick`)
+- Control flow (`if`, `elseif`, `else`, `repeat`, `contains`, `requires`, `on_tick`)
 - Built-in math / conversion functions
 - Numbers, operators, punctuation
 
@@ -111,6 +114,10 @@ the script and validates the language rules, including:
 - comments longer than 31 characters (warning)
 - databus paths when a `<script>.json` schema exists: unknown paths, wrong
   direction, and assignment/expression type mismatches
+- `requires` guards must name a single `in`/`out` databus variable, which is
+  validated against the schema
+- unguarded `in`/`out` access (warning, once per variable per function/on_tick):
+  wrap access in a matching `requires` block
 
 ## Quick fixes
 
@@ -128,7 +135,8 @@ Fixes offered from the lightbulb / `Ctrl+.`:
 Type a prefix and press `Tab`:
 
 `dvar`, `dlist`, `dtype`, `dmember`, `dfunc`, `ontick`, `if`, `ifelse`,
-`repeat`, `call`, `varassign`, `paramassign`, `inassign`, `outexpr`.
+`repeat`, `requires`, `call`, `varassign`, `paramassign`, `inassign`,
+`outexpr`.
 
 ## Outline
 
