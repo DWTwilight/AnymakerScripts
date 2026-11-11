@@ -78,36 +78,42 @@ var btnStartStopPressFlag = false
 # power state machine
 define function power_on_tick ()
 {
-	if (out Btn_Start_Stop.is_pressed && ! (var btnStartStopPressFlag))
+	requires (out Btn_Start_Stop.is_pressed)
 	{
-		if (var powerState == 0)
+		requires (out Steering_Wheel.left_pedal)
 		{
-			if (out Steering_Wheel.left_pedal > 0.5)
+			if (out Btn_Start_Stop.is_pressed && ! (var btnStartStopPressFlag))
 			{
-				var powerState = 2
+				if (var powerState == 0)
+				{
+					if (out Steering_Wheel.left_pedal > 0.5)
+					{
+						var powerState = 2
+					}
+					else
+					{
+						var powerState = 1
+					}
+				}
+				elseif (var powerState == 1)
+				{
+					if (out Steering_Wheel.left_pedal > 0.5)
+					{
+						var powerState = 2
+					}
+					else
+					{
+						var powerState = 0
+					}
+				}
+				elseif (var powerState == 2)
+				{
+					var powerState = 0
+				}
 			}
-			else
-			{
-				var powerState = 1
-			}
-		}
-		elseif (var powerState == 1)
-		{
-			if (out Steering_Wheel.left_pedal > 0.5)
-			{
-				var powerState = 2
-			}
-			else
-			{
-				var powerState = 0
-			}
-		}
-		elseif (var powerState == 2)
-		{
-			var powerState = 0
+			var btnStartStopPressFlag = out Btn_Start_Stop.is_pressed
 		}
 	}
-	var btnStartStopPressFlag = out Btn_Start_Stop.is_pressed
 
 	define var bool mainOn
 	var mainOn = var powerState > 0
@@ -116,13 +122,32 @@ define function power_on_tick ()
 	define var fractional engineValue
 	call bool_to_fraction (var mainOn, var mainValue)
 	call bool_to_fraction (var powerState == 2, var engineValue)
-	in ASM_Power_Main.input = var mainValue
-	in ASM_Power_Engine.input = var engineValue
 
-	in Btn_Start_Stop.is_illuminated = var mainOn
-	in Dial_RPM.is_illuminated = var mainOn
-	in Dial_Speed.is_illuminated = var mainOn
-	in Display_Gear.is_illuminated = var mainOn
+	requires (in ASM_Power_Main.input)
+	{
+		in ASM_Power_Main.input = var mainValue
+	}
+	requires (in ASM_Power_Engine.input)
+	{
+		in ASM_Power_Engine.input = var engineValue
+	}
+
+	requires (in Btn_Start_Stop.is_illuminated)
+	{
+		in Btn_Start_Stop.is_illuminated = var mainOn
+	}
+	requires (in Dial_RPM.is_illuminated)
+	{
+		in Dial_RPM.is_illuminated = var mainOn
+	}
+	requires (in Dial_Speed.is_illuminated)
+	{
+		in Dial_Speed.is_illuminated = var mainOn
+	}
+	requires (in Display_Gear.is_illuminated)
+	{
+		in Display_Gear.is_illuminated = var mainOn
+	}
 }
 
 # engine logic
@@ -130,28 +155,37 @@ define function engine_on_tick ()
 {
 	define var fractional starterValue
 	define var fractional throttleValue
+	var starterValue = 0.0
+	var throttleValue = 0.0
 
 	if (var powerState == 2)
 	{
-		define var fractional rawMinimal
-		define var fractional clampedMinimal
-		define var fractional rawThrottle
+		requires (out Engine.rps)
+		{
+			requires (out Steering_Wheel.right_pedal)
+			{
+				define var fractional rawMinimal
+				define var fractional clampedMinimal
+				define var fractional rawThrottle
 
-		call bool_to_fraction (out Engine.rps < var STARTER_CUTOFF_RPS, var starterValue)
+				call bool_to_fraction (out Engine.rps < var STARTER_CUTOFF_RPS, var starterValue)
 
-		var rawMinimal = (var IDLE_RPS - out Engine.rps) * 0.2
-		call clamp (var rawMinimal, var MIN_IDLE_THROTTLE, 1.0, var clampedMinimal)
-		var rawThrottle = var clampedMinimal + (1.0 - var clampedMinimal) * out Steering_Wheel.right_pedal
-		call clamp (var rawThrottle, var MIN_IDLE_THROTTLE, 1.0, var throttleValue)
+				var rawMinimal = (var IDLE_RPS - out Engine.rps) * 0.2
+				call clamp (var rawMinimal, var MIN_IDLE_THROTTLE, 1.0, var clampedMinimal)
+				var rawThrottle = var clampedMinimal + (1.0 - var clampedMinimal) * out Steering_Wheel.right_pedal
+				call clamp (var rawThrottle, var MIN_IDLE_THROTTLE, 1.0, var throttleValue)
+			}
+		}
 	}
-	else
+
+	requires (in ASM_Power_Starter.input)
 	{
-		var starterValue = 0.0
-		var throttleValue = 0.0
+		in ASM_Power_Starter.input = var starterValue
 	}
-
-	in ASM_Power_Starter.input = var starterValue
-	in ASM_Throttle.input = var throttleValue
+	requires (in ASM_Throttle.input)
+	{
+		in ASM_Throttle.input = var throttleValue
+	}
 }
 
 # ackermann steering logic
@@ -164,33 +198,45 @@ define function steering_on_tick ()
 	define var fractional leftSteeringVal
 	define var fractional rightSteeringVal
 
-	var steerInput = out Steering_Wheel.steering
-	if (abs (var steerInput) < var STEER_DEAD_ZONE)
+	var leftSteeringVal = 0.0
+	var rightSteeringVal = 0.0
+
+	requires (out Steering_Wheel.steering)
 	{
-		var leftSteeringVal = 0.0
-		var rightSteeringVal = 0.0
-	}
-	else
-	{
-		var virtualSteerRadius = var WHEEL_BASE / tan (abs (var steerInput) * var MAX_VIRTUAL_STEER_ANG)
-		var innerNorm = atan (var WHEEL_BASE / (var virtualSteerRadius - var TRACK_WIDTH * 0.5)) / var MAX_INNER_STEER_ANGLE
-		var outerNorm = atan (var WHEEL_BASE / (var virtualSteerRadius + var TRACK_WIDTH * 0.5)) / var MAX_INNER_STEER_ANGLE
-		if (var steerInput > 0.0)
+		var steerInput = out Steering_Wheel.steering
+		if (abs (var steerInput) < var STEER_DEAD_ZONE)
 		{
-			# right wheel = inner
-			var rightSteeringVal = var innerNorm
-			var leftSteeringVal = 0.0 - var outerNorm
+			var leftSteeringVal = 0.0
+			var rightSteeringVal = 0.0
 		}
 		else
 		{
-			# left wheel = inner
-			var leftSteeringVal = var innerNorm
-			var rightSteeringVal = 0.0 - var outerNorm
+			var virtualSteerRadius = var WHEEL_BASE / tan (abs (var steerInput) * var MAX_VIRTUAL_STEER_ANG)
+			var innerNorm = atan (var WHEEL_BASE / (var virtualSteerRadius - var TRACK_WIDTH * 0.5)) / var MAX_INNER_STEER_ANGLE
+			var outerNorm = atan (var WHEEL_BASE / (var virtualSteerRadius + var TRACK_WIDTH * 0.5)) / var MAX_INNER_STEER_ANGLE
+			if (var steerInput > 0.0)
+			{
+				# right wheel = inner
+				var rightSteeringVal = var innerNorm
+				var leftSteeringVal = 0.0 - var outerNorm
+			}
+			else
+			{
+				# left wheel = inner
+				var leftSteeringVal = var innerNorm
+				var rightSteeringVal = 0.0 - var outerNorm
+			}
 		}
 	}
 
-	in ASM_Steering_Left.input = var leftSteeringVal
-	in ASM_Steering_Right.input = var rightSteeringVal
+	requires (in ASM_Steering_Left.input)
+	{
+		in ASM_Steering_Left.input = var leftSteeringVal
+	}
+	requires (in ASM_Steering_Right.input)
+	{
+		in ASM_Steering_Right.input = var rightSteeringVal
+	}
 }
 
 # door latch logic
@@ -198,23 +244,62 @@ define function door_lock_on_tick ()
 {
 	define var fractional latchValue
 
-	call bool_to_fraction (out FL_Door_Handle.is_active && ! (out Door_Lock.is_pressed), var latchValue)
-	in ASM_FL_Door_Latch.input = var latchValue
+	requires (out Door_Lock.is_pressed)
+	{
+		requires (out FL_Door_Handle.is_active)
+		{
+			requires (in ASM_FL_Door_Latch.input)
+			{
+				call bool_to_fraction (out FL_Door_Handle.is_active && ! (out Door_Lock.is_pressed), var latchValue)
+				in ASM_FL_Door_Latch.input = var latchValue
+			}
+		}
 
-	call bool_to_fraction (out FR_Door_Handle.is_active && ! (out Door_Lock.is_pressed), var latchValue)
-	in ASM_FR_Door_Latch.input = var latchValue
+		requires (out FR_Door_Handle.is_active)
+		{
+			requires (in ASM_FR_Door_Latch.input)
+			{
+				call bool_to_fraction (out FR_Door_Handle.is_active && ! (out Door_Lock.is_pressed), var latchValue)
+				in ASM_FR_Door_Latch.input = var latchValue
+			}
+		}
 
-	call bool_to_fraction (out RL_Door_Handle.is_active && ! (out Door_Lock.is_pressed), var latchValue)
-	in ASM_RL_Door_Latch.input = var latchValue
+		requires (out RL_Door_Handle.is_active)
+		{
+			requires (in ASM_RL_Door_Latch.input)
+			{
+				call bool_to_fraction (out RL_Door_Handle.is_active && ! (out Door_Lock.is_pressed), var latchValue)
+				in ASM_RL_Door_Latch.input = var latchValue
+			}
+		}
 
-	call bool_to_fraction (out RR_Door_Handle.is_active && ! (out Door_Lock.is_pressed), var latchValue)
-	in ASM_RR_Door_Latch.input = var latchValue
+		requires (out RR_Door_Handle.is_active)
+		{
+			requires (in ASM_RR_Door_Latch.input)
+			{
+				call bool_to_fraction (out RR_Door_Handle.is_active && ! (out Door_Lock.is_pressed), var latchValue)
+				in ASM_RR_Door_Latch.input = var latchValue
+			}
+		}
 
-	call bool_to_fraction (out Trunk_Handle.is_active && ! (out Door_Lock.is_pressed), var latchValue)
-	in ASM_Trunk_Latch.input = var latchValue
+		requires (out Trunk_Handle.is_active)
+		{
+			requires (in ASM_Trunk_Latch.input)
+			{
+				call bool_to_fraction (out Trunk_Handle.is_active && ! (out Door_Lock.is_pressed), var latchValue)
+				in ASM_Trunk_Latch.input = var latchValue
+			}
+		}
 
-	call bool_to_fraction (out Hood_Handle.is_active && ! (out Door_Lock.is_pressed), var latchValue)
-	in ASM_Hood_Latch.input = var latchValue
+		requires (out Hood_Handle.is_active)
+		{
+			requires (in ASM_Hood_Latch.input)
+			{
+				call bool_to_fraction (out Hood_Handle.is_active && ! (out Door_Lock.is_pressed), var latchValue)
+				in ASM_Hood_Latch.input = var latchValue
+			}
+		}
+	}
 }
 
 on_tick
