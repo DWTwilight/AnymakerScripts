@@ -116,6 +116,71 @@ powerState
     - If no break (<= 0.5), 1 -> 0
   - if current state is 2, 2 -> 0
 
+## Transmission
+
+### Databus Inputs (Out Variables)
+
+- Engine.rps
+  - Fractional
+  - the engine starts at 6 rps (360 RPM)
+- Gear_Stick.throttle
+  - Integer
+  - Current Gear Selection: 0 -> neutral, 1 -> reverse, 2 -> drive, 3 -> manual mode
+- Paddle_Shift.throttle
+  - Fractional
+  - Paddle shift for manual mode. -1(down) or 1(up).
+- Gearbox.current_gear
+  - Integer
+  - Gearbox's current gear: 0 -> neutral, -1 -> reverse, 1/2/3 -> forward gears
+- Gearbox.target_gear
+  - Integer
+  - Gearbox's target gear. If not same as Gearbox.current_gear, the gearbox is shifting
+- Gearbox.clutch_factor
+  - Fractional
+  - Gearbox's clutch_factor(0-1, 1 means fully engaded). If not 1, the gearbox is shifting. If the gearbox is in neutral(and not shifting), the value is 1 but the clutch is disconnected.
+
+### Databus Outputs (In Variables)
+
+- ASM_Gearbox.input
+  - Fractional
+  - above 0.75 shifts up, below -0.75 shifts down. (pulse input, constant value only shifts once)
+- ASM_Reducer_A.input
+  - Fractional
+  - Reducer A clutch. 0 -> engaded, 1 -> disengaded
+- ASM_Reducer_B.input
+  - Fractional
+  - Reducer B clutch. 0 -> engaded, 1 -> disengaded
+
+### Logic
+
+#### Overall design
+
+- This is a 3x2 6-speed auto gearbox with manual mode, with 3 drive gears and 2 reducer (A, B, only one is engaded at anytime)
+- gear mapping(gearbox & reducer):
+  - -1: -1A
+  - 0: 0A/0B
+  - 1: 1A
+  - 2: 2A
+  - 3: 3A
+  - 4: 1B
+  - 5: 2B
+  - 6: 3B
+- Gear_Stick
+  - 0 -> neutral, 1 -> reverse, 2 -> drive, 3 -> manual mode
+  - drive & manual mode shifts range: 1-6
+- Paddle_Shift.throttle
+  - only used in manual mode
+  - value treats as pulse, meaning constant value won't shift consequtively
+- ASM_Gearbox.input
+  - value treats as pulse, so if gear jump is needed (3 -> 1, 3 -> 0), the value needs to blink, and watch Gearbox.target_gear as target
+- Anti-stall
+  - define constant: `ANTI_STALL_RPS = 9`
+  - if engine rps is below `ANTI_STALL_RPS`, force to neutral (by only directly changing gearbox -> 0, no need to change reducer)
+  - this is a fake neutral, internal state should still be the original gear (1-6)
+  - recovers if break is lifted (< 0.2? define a constant for this)
+
+#### Impl
+
 ## Engine
 
 ### Databus Inputs (Out Variables)

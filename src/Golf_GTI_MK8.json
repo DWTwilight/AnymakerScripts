@@ -72,6 +72,18 @@
             "type": "fractional",
             "description": "RR brake force, 0 (no brake) -> 1 (full brake)"
         },
+        "ASM_Gearbox.input": {
+            "type": "fractional",
+            "description": "Gearbox shift pulse: above 0.75 shifts up, below -0.75 shifts down"
+        },
+        "ASM_Reducer_A.input": {
+            "type": "fractional",
+            "description": "Reducer A clutch: 0 engaged, 1 disengaged"
+        },
+        "ASM_Reducer_B.input": {
+            "type": "fractional",
+            "description": "Reducer B clutch: 0 engaged, 1 disengaged"
+        },
         "ASM_Steering_Left.input": {
             "type": "fractional",
             "description": "Steering left input (-1 to 1), 1 is turning left"
@@ -129,6 +141,42 @@
         "Steering_Wheel.steering": {
             "type": "fractional",
             "description": "Steering input, -1 (full left) -> 1 (full right)"
+        },
+        "Gear_Stick.throttle": {
+            "type": "integer",
+            "description": "Gear selection: 0 neutral, 1 reverse, 2 drive, 3 manual"
+        },
+        "Paddle_Shift.throttle": {
+            "type": "fractional",
+            "description": "Paddle shift for manual mode: -1 down, 1 up"
+        },
+        "Gearbox.current_gear": {
+            "type": "integer",
+            "description": "Gearbox current gear: 0 neutral, -1 reverse, 1/2/3 forward"
+        },
+        "Gearbox.target_gear": {
+            "type": "integer",
+            "description": "Gearbox target gear; differs from current while shifting"
+        },
+        "Gearbox.clutch_factor": {
+            "type": "fractional",
+            "description": "Clutch engagement 0-1; 1 means fully engaged"
+        },
+        "Wheel_FL.rps": {
+            "type": "fractional",
+            "description": "FL wheel rps"
+        },
+        "Wheel_FR.rps": {
+            "type": "fractional",
+            "description": "FR wheel rps"
+        },
+        "Wheel_RL.rps": {
+            "type": "fractional",
+            "description": "RL wheel rps"
+        },
+        "Wheel_RR.rps": {
+            "type": "fractional",
+            "description": "RR wheel rps"
         }
     }
 }

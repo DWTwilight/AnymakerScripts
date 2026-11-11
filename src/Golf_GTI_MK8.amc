@@ -32,6 +32,18 @@ var STEER_DEAD_ZONE = 0.001
 define var fractional MAX_INNER_STEER_ANGLE
 var MAX_INNER_STEER_ANGLE = atan (var WHEEL_BASE / (var WHEEL_BASE / tan (var MAX_VIRTUAL_STEER_ANG) - var TRACK_WIDTH * 0.5))
 
+# anti-stall engine rps
+define var fractional ANTI_STALL_RPS
+var ANTI_STALL_RPS = 9.0
+
+# anti-stall brake release
+define var fractional ANTI_STALL_RECOVER_BRAKE
+var ANTI_STALL_RECOVER_BRAKE = 0.2
+
+# reverse engage max speed
+define var fractional REVERSE_MAX_WHEEL_RPS
+var REVERSE_MAX_WHEEL_RPS = 0.5
+
 # Shared Globals
 
 # power & lights state
@@ -40,6 +52,22 @@ var MAX_INNER_STEER_ANGLE = atan (var WHEEL_BASE / (var WHEEL_BASE / tan (var MA
 # 2 -> engine on
 define var integer powerState
 var powerState = 0
+
+# transmission selected gear
+define var integer targetGear
+var targetGear = 0
+
+# transmission last stick
+define var integer lastStick
+var lastStick = 0
+
+# last paddle value
+define var fractional lastPaddle
+var lastPaddle = 0.0
+
+# gearbox pulse cooldown
+define var bool gearboxPulseCooldown
+var gearboxPulseCooldown = false
 
 # bool -> 1.0 / 0.0
 define function bool_to_fraction (bool value, fractional result)
@@ -170,9 +198,20 @@ define function engine_on_tick ()
 
 				call bool_to_fraction (out Engine.rps < var STARTER_CUTOFF_RPS, var starterValue)
 
-				var rawMinimal = (var IDLE_RPS - out Engine.rps) * 0.2
+				var rawMinimal = var MIN_IDLE_THROTTLE
+				requires (out Steering_Wheel.left_pedal)
+				{
+					if (out Steering_Wheel.left_pedal < var ANTI_STALL_RECOVER_BRAKE)
+					{
+						var rawMinimal = (var IDLE_RPS - out Engine.rps) * 0.2
+					}
+				}
 				call clamp (var rawMinimal, var MIN_IDLE_THROTTLE, 1.0, var clampedMinimal)
-				var rawThrottle = var clampedMinimal + (1.0 - var clampedMinimal) * out Steering_Wheel.right_pedal
+				var rawThrottle = var clampedMinimal
+				requires (out Gearbox.clutch_factor)
+				{
+					var rawThrottle = var clampedMinimal + (1.0 - var clampedMinimal) * out Steering_Wheel.right_pedal * out Gearbox.clutch_factor
+				}
 				call clamp (var rawThrottle, var MIN_IDLE_THROTTLE, 1.0, var throttleValue)
 			}
 		}
@@ -185,6 +224,159 @@ define function engine_on_tick ()
 	requires (in ASM_Throttle.input)
 	{
 		in ASM_Throttle.input = var throttleValue
+	}
+}
+
+# transmission logic
+define function transmission_on_tick ()
+{
+	# gear stick selection
+	requires (out Gear_Stick.throttle)
+	{
+		if (out Gear_Stick.throttle == 0)
+		{
+			# neutral
+			var targetGear = 0
+		}
+		elseif (out Gear_Stick.throttle == 1)
+		{
+			# reverse
+			var targetGear = -1
+		}
+		elseif (out Gear_Stick.throttle == 2)
+		{
+			# TODO: impl auto mode
+			var targetGear = 1
+		}
+		elseif (out Gear_Stick.throttle == 3)
+		{
+			# manual mode
+			if (! (var lastStick == 3))
+			{
+				# from other modes to manual
+				if (var targetGear < 1)
+				{
+					# not drive
+					var targetGear = 1
+				}
+			}
+			else {
+				# already in manual
+				# paddle shifts (manual only)
+				define var bool paddleUp
+				define var bool paddleDown
+				var paddleUp = false
+				var paddleDown = false
+				
+				requires (out Paddle_Shift.throttle)
+				{
+					var paddleUp = (out Paddle_Shift.throttle > 0.5) && (var lastPaddle <= 0.5)
+					var paddleDown = (out Paddle_Shift.throttle < -0.5) && (var lastPaddle >= -0.5)
+					var lastPaddle = out Paddle_Shift.throttle
+				}
+				if (var paddleUp)
+				{
+					var targetGear = var targetGear + 1
+				}
+				elseif (var paddleDown)
+				{
+					var targetGear = var targetGear - 1
+				}
+				if (var targetGear > 6)
+				{
+					var targetGear = 6
+				}
+				if (var targetGear < 1)
+				{
+					var targetGear = 1
+				}
+			}
+		}
+		var lastStick = out Gear_Stick.throttle
+	}
+
+	# anti-stall fake neutral
+	define var bool antiStall
+	var antiStall = false
+	if (! (var targetGear == 0))
+	{
+		requires (out Engine.rps)
+		{
+			requires (out Steering_Wheel.left_pedal)
+			{
+				var antiStall = (out Engine.rps < var ANTI_STALL_RPS) && (out Steering_Wheel.left_pedal > var ANTI_STALL_RECOVER_BRAKE)
+			}
+		}
+	}
+
+	define var integer desiredGear
+	if (var antiStall)
+	{
+		var desiredGear = 0
+	}
+	else
+	{
+		var desiredGear = var targetGear
+	}
+
+	# desired reducer
+	requires (in ASM_Reducer_A.input)
+	{
+		requires (in ASM_Reducer_B.input)
+		{
+			if (var targetGear >= 4)
+			{
+				in ASM_Reducer_A.input = 1.0
+				in ASM_Reducer_B.input = 0.0
+			}
+			else
+			{
+				in ASM_Reducer_A.input = 0.0
+				in ASM_Reducer_B.input = 1.0
+			}
+		}
+	}
+
+	# desired gearbox gear
+	define var integer desiredGearboxGear
+	if (var desiredGear <= 3)
+	{
+		var desiredGearboxGear = var desiredGear
+	}
+	else
+	{
+		var desiredGearboxGear = var desiredGear - 3
+	}
+
+	# gearbox pulse
+	define var fractional gearboxCommand
+	var gearboxCommand = 0.0
+	if (var gearboxPulseCooldown)
+	{
+		var gearboxPulseCooldown = false
+		var gearboxCommand = 0.0
+	}
+	else
+	{
+		requires (out Gearbox.target_gear)
+		{
+			if (out Gearbox.target_gear < var desiredGearboxGear)
+			{
+				var gearboxCommand = 1.0
+				var gearboxPulseCooldown = true
+			}
+			elseif (out Gearbox.target_gear > var desiredGearboxGear)
+			{
+				var gearboxCommand = -1.0
+				var gearboxPulseCooldown = true
+			}
+		}
+	}
+
+	# gearbox output
+	requires (in ASM_Gearbox.input)
+	{
+		in ASM_Gearbox.input = var gearboxCommand
 	}
 }
 
@@ -334,6 +526,7 @@ define function door_lock_on_tick ()
 on_tick
 {
 	call power_on_tick ()
+	call transmission_on_tick ()
 	call engine_on_tick ()
 	call brake_on_tick ()
 	call steering_on_tick ()
