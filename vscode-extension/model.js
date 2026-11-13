@@ -267,7 +267,10 @@ function buildModel(text) {
     if (token.value === 'var' || token.value === 'param') {
       const nameTok = tokens[i + 1];
       if (nameTok && nameTok.type === 'ident') {
-        addOccurrence(nameTok.value, nameTok, token.value);
+        const next = tokens[i + 2];
+        const role =
+          token.value === 'var' && next && next.value === '=' ? 'varwrite' : token.value;
+        addOccurrence(nameTok.value, nameTok, role);
         const dot = tokens[i + 2];
         const member = tokens[i + 3];
         if (dot && dot.value === '.' && member && member.type === 'ident') {
@@ -400,6 +403,22 @@ function databusContextAt(model, offset) {
   return { direction: keyword.value, start: pathStart >= 0 ? pathStart : offset, inPath: false };
 }
 
+function unusedDeclarations(model) {
+  const readVariables = new Set();
+  const usedParameters = new Set();
+
+  for (const occurrence of model.occurrences) {
+    if (occurrence.role === 'var') readVariables.add(occurrence.name);
+    else if (occurrence.role === 'param') usedParameters.add(occurrence.name);
+  }
+
+  return model.declarations.filter((decl) => {
+    if (decl.kind === 'global' || decl.kind === 'local') return !readVariables.has(decl.name);
+    if (decl.kind === 'param') return !usedParameters.has(decl.name);
+    return false;
+  });
+}
+
 module.exports = {
   buildModel,
   getModel,
@@ -408,5 +427,6 @@ module.exports = {
   isInDatabus,
   isExcluded,
   databusContextAt,
+  unusedDeclarations,
   BUILTIN_TYPES,
 };

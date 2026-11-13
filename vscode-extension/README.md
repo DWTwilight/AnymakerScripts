@@ -20,13 +20,13 @@ actually hosts the folder:
 2. Install into Windows VS Code (local folder):
 
    ```sh
-   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.20.0.vsix")" --force
+   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.22.0.vsix")" --force
    ```
 
    Or, inside a Remote-WSL window, use the integrated terminal:
 
    ```sh
-   code --install-extension "$PWD/anymaker-scripting-0.20.0.vsix" --force
+   code --install-extension "$PWD/anymaker-scripting-0.22.0.vsix" --force
    ```
 
 3. Reload VS Code.
@@ -80,6 +80,15 @@ and recolors them with editor decorations:
 - **Local variables** keep the theme's normal variable color.
 
 Colors adapt to the active dark/light/high-contrast theme.
+
+Unused globals, locals, constants, and parameters are dimmed gray (declaration
+and any write-only assignments). A variable counts as used when it is read,
+indexed, mutated, or accessed by a writable argument.
+
+Hovering an unused declaration shows an unused note. For variables/constants,
+the quick fix `Remove unused '<name>'` deletes the declaration and its
+write-only assignment lines. Parameters show the hover note but are not removed
+automatically.
 
 ## What is highlighted
 
@@ -135,6 +144,7 @@ Fixes offered from the lightbulb / `Ctrl+.`:
 - insert spacing for `!(` and `abs(` style calls
 - move a block-opening `{` to a new line
 - fix a near-miss databus path from the “Did you mean …?” suggestion
+- remove an unused variable/constant (declaration + write-only assignments)
 
 ## Snippets
 

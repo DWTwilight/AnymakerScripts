@@ -7,7 +7,7 @@ const { documentSymbols } = require('./symbols');
 const { foldingRanges } = require('./folding');
 const { lookupHover } = require('./hover');
 const { registerIntellisense } = require('./intellisense');
-const { getModel, isExcluded, databusContextAt } = require('./model');
+const { getModel, isExcluded, databusContextAt, unusedDeclarations } = require('./model');
 const { loadSchema, clearSchema } = require('./databus');
 const { getConstants, clearConstants } = require('./constants');
 const { formatText } = require('./format');
@@ -25,6 +25,7 @@ let globalType;
 let paramType;
 let inType;
 let outType;
+let unusedType;
 let diagnostics;
 const timers = new Map();
 const checked = new Map();
@@ -45,11 +46,15 @@ function rebuildTypes() {
   if (paramType) paramType.dispose();
   if (inType) inType.dispose();
   if (outType) outType.dispose();
+  if (unusedType) unusedType.dispose();
   const colors = palette();
   globalType = vscode.window.createTextEditorDecorationType({ color: colors.global });
   paramType = vscode.window.createTextEditorDecorationType({ color: colors.param });
   inType = vscode.window.createTextEditorDecorationType({ color: colors.in });
   outType = vscode.window.createTextEditorDecorationType({ color: colors.out });
+  unusedType = vscode.window.createTextEditorDecorationType({
+    color: new vscode.ThemeColor('disabledForeground'),
+  });
 }
 
 function toRanges(document, tokens) {
@@ -61,16 +66,38 @@ function toRanges(document, tokens) {
 function updateEditor(editor) {
   if (!editor || editor.document.languageId !== 'anymaker') return;
   if (!globalType) rebuildTypes();
+
+  const document = editor.document;
+  const text = document.getText();
   let result;
   try {
-    result = analyze(editor.document.getText());
+    result = analyze(text);
   } catch (error) {
     return;
   }
-  editor.setDecorations(globalType, toRanges(editor.document, result.global));
-  editor.setDecorations(paramType, toRanges(editor.document, result.param));
-  editor.setDecorations(inType, toRanges(editor.document, result.inVars));
-  editor.setDecorations(outType, toRanges(editor.document, result.outVars));
+
+  const model = getModel(document);
+  const unused = unusedDeclarations(model);
+  const unusedNames = new Set(unused.map((decl) => decl.name));
+  const keep = (token) => !unusedNames.has(text.slice(token.start, token.end));
+
+  editor.setDecorations(globalType, toRanges(document, result.global.filter(keep)));
+  editor.setDecorations(paramType, toRanges(document, result.param.filter(keep)));
+  editor.setDecorations(inType, toRanges(document, result.inVars));
+  editor.setDecorations(outType, toRanges(document, result.outVars));
+
+  const unusedRanges = [];
+  for (const occurrence of model.occurrences) {
+    if (!unusedNames.has(occurrence.name)) continue;
+    if (occurrence.role !== 'decl' && occurrence.role !== 'varwrite') continue;
+    unusedRanges.push(
+      new vscode.Range(
+        document.positionAt(occurrence.start),
+        document.positionAt(occurrence.end)
+      )
+    );
+  }
+  editor.setDecorations(unusedType, unusedRanges);
 }
 
 async function refreshDiagnostics(document) {
@@ -229,6 +256,16 @@ async function provideHover(document, position) {
         markdown.appendMarkdown(`\n\n**Value:** \`${constant.display}\``);
       }
     }
+    const isUnused = unusedDeclarations(model).some(
+      (candidate) => candidate.name === decl.name && candidate.kind === decl.kind
+    );
+    if (isUnused) {
+      markdown.appendMarkdown(
+        decl.kind === 'param'
+          ? '\n\n**Unused parameter:** never referenced.'
+          : '\n\n**Unused:** never read. Use the quick fix to remove it.'
+      );
+    }
     const comments = commentAbove(document, decl);
     for (const comment of comments) {
       markdown.appendMarkdown('\n\n');
@@ -255,29 +292,83 @@ function provideFoldingRanges(document) {
   }
 }
 
+function unusedCodeAction(document, range) {
+  const model = getModel(document);
+  const unused = unusedDeclarations(model);
+  if (!unused.length) return null;
+
+  const wordRange = document.getWordRangeAtPosition(range.start, /[A-Za-z_][A-Za-z0-9_]*/);
+  if (!wordRange) return null;
+  const name = document.getText(wordRange);
+  const decl = unused.find(
+    (candidate) => candidate.name === name && (candidate.kind === 'global' || candidate.kind === 'local')
+  );
+  if (!decl) return null;
+
+  const declarations = model.declarations.filter(
+    (candidate) => candidate.name === name && (candidate.kind === 'global' || candidate.kind === 'local')
+  );
+  if (declarations.length !== 1) return null;
+
+  const occurrences = model.occurrences.filter(
+    (occurrence) => occurrence.name === name && (occurrence.role === 'decl' || occurrence.role === 'varwrite')
+  );
+  if (!occurrences.length) return null;
+
+  const lines = new Set();
+  for (const occurrence of occurrences) {
+    const line = document.positionAt(occurrence.start).line;
+    const text = document.lineAt(line).text.trim();
+    if (!/^(define\s+(var|list)\b|var\b)/.test(text)) return null;
+    lines.add(line);
+  }
+
+  const edit = new vscode.WorkspaceEdit();
+  for (const line of [...lines].sort((a, b) => a - b)) {
+    const current = document.lineAt(line);
+    if (line + 1 < document.lineCount) {
+      const next = document.lineAt(line + 1);
+      edit.delete(document.uri, new vscode.Range(current.range.start, next.range.start));
+    } else {
+      edit.delete(document.uri, current.range);
+    }
+  }
+
+  const action = new vscode.CodeAction(`Remove unused '${name}'`, vscode.CodeActionKind.QuickFix);
+  action.edit = edit;
+  action.isPreferred = true;
+  return action;
+}
+
 function provideCodeActions(document, range, context) {
   const items = checked.get(document.uri.toString());
-  if (!items) return [];
   const actions = [];
-  for (const diagnostic of context.diagnostics) {
-    if (diagnostic.source !== 'anymaker') continue;
-    const offset = document.offsetAt(diagnostic.range.start);
-    const item = items.find((candidate) => candidate.start === offset && candidate.message === diagnostic.message);
-    if (!item || !item.fix) continue;
-    const action = new vscode.CodeAction(item.fix.title, vscode.CodeActionKind.QuickFix);
-    action.diagnostics = [diagnostic];
-    action.isPreferred = true;
-    const edit = new vscode.WorkspaceEdit();
-    for (const change of item.fix.edits) {
-      edit.replace(
-        document.uri,
-        new vscode.Range(document.positionAt(change.start), document.positionAt(change.end)),
-        change.newText
-      );
+
+  if (items) {
+    for (const diagnostic of context.diagnostics) {
+      if (diagnostic.source !== 'anymaker') continue;
+      const offset = document.offsetAt(diagnostic.range.start);
+      const item = items.find((candidate) => candidate.start === offset && candidate.message === diagnostic.message);
+      if (!item || !item.fix) continue;
+      const action = new vscode.CodeAction(item.fix.title, vscode.CodeActionKind.QuickFix);
+      action.diagnostics = [diagnostic];
+      action.isPreferred = true;
+      const edit = new vscode.WorkspaceEdit();
+      for (const change of item.fix.edits) {
+        edit.replace(
+          document.uri,
+          new vscode.Range(document.positionAt(change.start), document.positionAt(change.end)),
+          change.newText
+        );
+      }
+      action.edit = edit;
+      actions.push(action);
     }
-    action.edit = edit;
-    actions.push(action);
   }
+
+  const unusedAction = unusedCodeAction(document, range);
+  if (unusedAction) actions.push(unusedAction);
+
   return actions;
 }
 
@@ -367,6 +458,7 @@ function activate(context) {
         if (paramType) paramType.dispose();
         if (inType) inType.dispose();
         if (outType) outType.dispose();
+        if (unusedType) unusedType.dispose();
         for (const timer of timers.values()) clearTimeout(timer);
         timers.clear();
       },
