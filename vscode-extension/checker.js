@@ -18,7 +18,7 @@ const LIST_METHODS = new Set(['append', 'insert', 'erase', 'clear']);
 const UNSUPPORTED = new Set(['while', 'for', 'do', 'switch', 'break', 'continue', 'return', 'goto']);
 
 const TOKEN_RE =
-  /#[^\n]*|"[^"\n]*"|"[^"\n]*|[A-Za-z_][A-Za-z0-9_]*|(?:\d+\.\d*|\.\d+|\d+)(?:[eE][+-]?\d+)?|&&|\|\||==|!=|>=|<=|\+=|-=|\*=|\/=|%=|\+\+|--|[{}()\[\],;.]|[+\-*/%^<>=!]/g;
+  /#[^\n]*|"[^"\n]*"|"[^"\n]*|[A-Za-z_][A-Za-z0-9_]*|(?:\d+\.\d*|\.\d+|\d+)(?:[eE][+-]?\d+)?|&&|\|\||==|!=|>=|<=|\+=|-=|\*=|\/=|%=|\+\+|--|[{}()\[\],;.]|[+\-*/%^<>=!]|[^\s]/g;
 
 const isListType = (t) => typeof t === 'string' && t.startsWith('list<') && t.endsWith('>');
 const elementTypeOf = (t) => t.slice(5, -1);

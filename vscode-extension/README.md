@@ -20,13 +20,13 @@ actually hosts the folder:
 2. Install into Windows VS Code (local folder):
 
    ```sh
-   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.19.0.vsix")" --force
+   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.20.0.vsix")" --force
    ```
 
    Or, inside a Remote-WSL window, use the integrated terminal:
 
    ```sh
-   code --install-extension "$PWD/anymaker-scripting-0.19.0.vsix" --force
+   code --install-extension "$PWD/anymaker-scripting-0.20.0.vsix" --force
    ```
 
 3. Reload VS Code.
@@ -164,9 +164,21 @@ spaces) are respected.
 
 ## Formatting
 
-`Format Document` re-indents using `{` / `}` nesting and trims trailing
-whitespace. It respects the editor's tabs/spaces and tab-size settings. It does
-not move braces or otherwise change code layout.
+`Format Document`:
+
+- re-indents using `{` / `}` nesting, respecting the editor's tabs/spaces and
+  tab-size settings
+- puts every `{` / `}` on its own line, splitting `else {`, `} else {`, and code
+  around braces
+- normalizes spaces around binary operators (`=`, `==`, `<`, `<=`, `+`, `-`,
+  `*`, `/`, `%`, `^`, `&&`, `||`)
+- keeps unary minus attached (`-1`, `2 * -3`) and normalizes `!(` → `! (`
+- removes spaces around `.`, inside `()`/`[]`, adds one space after `,` and
+  before `(` after identifiers
+- trims trailing whitespace and preserves blank lines, strings, and comments
+
+It does not rewrite `else if` to `elseif` or split multiple statements on one
+line.
 
 ## Hover
 
