@@ -44,9 +44,6 @@ var ANTI_STALL_RPS = 9.0
 define var fractional ANTI_STALL_RECOVER_BRAKE
 var ANTI_STALL_RECOVER_BRAKE = 0.01
 
-# reverse engage max speed
-define var fractional REVERSE_MAX_WHEEL_RPS
-var REVERSE_MAX_WHEEL_RPS = 0.5
 
 # Shared Globals
 
