@@ -56,8 +56,24 @@ var AUTOHOLD_STOP_RPS = 0.1
 define var fractional AUTOHOLD_RELEASE_THROTTLE
 var AUTOHOLD_RELEASE_THROTTLE = 0.1
 
+# abs min brake pedal
+define var fractional ABS_MIN_BRAKE
+var ABS_MIN_BRAKE = 0.2
 
-# Shared Globals
+# abs target speed ratio
+define var fractional ABS_TARGET_SPEED_RATIO
+var ABS_TARGET_SPEED_RATIO = 0.8
+
+# abs min reference speed
+define var fractional ABS_MIN_SPEED_RPS
+var ABS_MIN_SPEED_RPS = 0.5
+
+
+# Globals
+
+# Btn_Start_Stop Press flag
+define var bool lastStartStopPressd
+var lastStartStopPressd = false
 
 # power & lights state
 # 0 -> off
@@ -111,6 +127,14 @@ var autoholdActive = false
 define var fractional brakePedal
 var brakePedal = 0.0
 
+# abs enabled (default on)
+define var bool absEnabled
+var absEnabled = true
+
+# abs btn last state
+define var bool lastABSPressed
+var lastABSPressed = false
+
 # bool -> 1.0 / 0.0
 define function bool_to_fraction (bool value, fractional result)
 {
@@ -141,16 +165,12 @@ define function clamp (fractional inputValue, fractional minValue, fractional ma
 	}
 }
 
-# Btn_Start_Stop Press flag
-define var bool btnStartStopPressFlag
-var btnStartStopPressFlag = false
-
 # power state machine
 define function power_on_tick ()
 {
 	requires (out Btn_Start_Stop.is_pressed)
 	{
-		if (out Btn_Start_Stop.is_pressed && ! (var btnStartStopPressFlag))
+		if (out Btn_Start_Stop.is_pressed && ! (var lastStartStopPressd))
 		{
 			if (var powerState == 0)
 			{
@@ -179,7 +199,7 @@ define function power_on_tick ()
 				var powerState = 0
 			}
 		}
-		var btnStartStopPressFlag = out Btn_Start_Stop.is_pressed
+		var lastStartStopPressd = out Btn_Start_Stop.is_pressed
 	}
 
 	define var bool mainOn
@@ -473,6 +493,16 @@ define function brake_on_tick ()
 		var lastAutoholdPressed = out Btn_Autohold.is_pressed
 	}
 
+	# abs button (latching)
+	requires (out Btn_ABS.is_pressed)
+	{
+		if (out Btn_ABS.is_pressed && ! (var lastABSPressed))
+		{
+			var absEnabled = ! (var absEnabled)
+		}
+		var lastABSPressed = out Btn_ABS.is_pressed
+	}
+
 	# autohold activation
 	if (! (var autoholdEnabled))
 	{
@@ -518,6 +548,74 @@ define function brake_on_tick ()
 		var brakePedal = 1.0
 	}
 
+	# abs
+	define var fractional absRefSpeed
+	define var fractional absFactorFL
+	define var fractional absFactorFR
+	define var fractional absFactorRL
+	define var fractional absFactorRR
+	define var bool absTriggered
+	var absRefSpeed = 0.0
+	var absFactorFL = 1.0
+	var absFactorFR = 1.0
+	var absFactorRL = 1.0
+	var absFactorRR = 1.0
+	var absTriggered = false
+
+	if ((var absEnabled) && (var brakePedal > var ABS_MIN_BRAKE))
+	{
+		requires (out Wheel_FL.rps)
+		{
+			requires (out Wheel_FR.rps)
+			{
+				requires (out Wheel_RL.rps)
+				{
+					requires (out Wheel_RR.rps)
+					{
+						var absRefSpeed = abs (out Wheel_FL.rps)
+						if (abs (out Wheel_FR.rps) > var absRefSpeed)
+						{
+							var absRefSpeed = abs (out Wheel_FR.rps)
+						}
+						if (abs (out Wheel_RL.rps) > var absRefSpeed)
+						{
+							var absRefSpeed = abs (out Wheel_RL.rps)
+						}
+						if (abs (out Wheel_RR.rps) > var absRefSpeed)
+						{
+							var absRefSpeed = abs (out Wheel_RR.rps)
+						}
+
+						if (var absRefSpeed > var ABS_MIN_SPEED_RPS)
+						{
+							define var fractional absTargetSpeed
+							var absTargetSpeed = var ABS_TARGET_SPEED_RATIO * var absRefSpeed
+
+							if (abs (out Wheel_FL.rps) < var absTargetSpeed)
+							{
+								var absFactorFL = 0.0
+							}
+							if (abs (out Wheel_FR.rps) < var absTargetSpeed)
+							{
+								var absFactorFR = 0.0
+							}
+							if (abs (out Wheel_RL.rps) < var absTargetSpeed)
+							{
+								var absFactorRL = 0.0
+							}
+							if (abs (out Wheel_RR.rps) < var absTargetSpeed)
+							{
+								var absFactorRR = 0.0
+							}
+
+							var absTriggered = (var absFactorFL == 0.0) || (var absFactorFR == 0.0) || (var absFactorRL == 0.0) || (var absFactorRR == 0.0)
+						}
+					}
+				}
+			}
+		}
+	}
+
 	# brake pressures
 	define var fractional rearPressure
 	var rearPressure = var brakePedal * var REAR_BRAKE_RATIO
@@ -527,19 +625,19 @@ define function brake_on_tick ()
 	}
 	requires (in ASM_Brake_FL.input)
 	{
-		in ASM_Brake_FL.input = var brakePedal
+		in ASM_Brake_FL.input = var brakePedal * var absFactorFL
 	}
 	requires (in ASM_Brake_FR.input)
 	{
-		in ASM_Brake_FR.input = var brakePedal
+		in ASM_Brake_FR.input = var brakePedal * var absFactorFR
 	}
 	requires (in ASM_Brake_RL.input)
 	{
-		in ASM_Brake_RL.input = var rearPressure
+		in ASM_Brake_RL.input = var rearPressure * var absFactorRL
 	}
 	requires (in ASM_Brake_RR.input)
 	{
-		in ASM_Brake_RR.input = var rearPressure
+		in ASM_Brake_RR.input = var rearPressure * var absFactorRR
 	}
 
 	# button lights
@@ -550,6 +648,10 @@ define function brake_on_tick ()
 	requires (in Btn_Autohold.is_illuminated)
 	{
 		in Btn_Autohold.is_illuminated = (var autoholdEnabled) && (var powerState > 0)
+	}
+	requires (in Btn_ABS.is_illuminated)
+	{
+		in Btn_ABS.is_illuminated = (! (var absEnabled)) || (var absTriggered)
 	}
 }
 

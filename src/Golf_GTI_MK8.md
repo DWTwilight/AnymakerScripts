@@ -267,9 +267,6 @@ side. A right turn gives `Right = +inner`, `Left = -outer`; a left turn gives
 
 ## Break
 
-TODO:
-- ABS
-
 ### Databus Inputs (Out Variables)
 
 - Steering_Wheel.left_pedal
@@ -293,6 +290,9 @@ TODO:
 - Btn_Autohold.is_pressed
   - Boolean
   - autohold button
+- Btn_ABS.is_pressed
+  - Boolean
+  - ABS button
 
 ### Databus Outputs (In Variables)
 
@@ -314,6 +314,9 @@ TODO:
 - Btn_Autohold.is_illuminated
   - Boolean
   - autohold button light switch
+- Btn_ABS.is_illuminated
+  - Boolean
+  - abs button light switch
 
 ### Logic
 
@@ -326,6 +329,13 @@ TODO:
   - `abs(wheel.rps)` below this counts as a stopped wheel
 - `AUTOHOLD_RELEASE_THROTTLE = 0.1`
   - driver throttle above this releases autohold
+- `ABS_MIN_BRAKE = 0.2`
+  - ABS is only evaluated when `brakePedal > ABS_MIN_BRAKE`
+- `ABS_TARGET_SPEED_RATIO = 0.8`
+  - target wheel speed as a fraction of `refSpeed`; below this the wheel is
+    slipping and its brake pressure is dropped to `0` for that tick
+- `ABS_MIN_SPEED_RPS = 0.5`
+  - ABS is disabled when `refSpeed` is at or below this
 
 #### Global state
 
@@ -336,6 +346,8 @@ autoholdEnabled        # autohold mode, toggled by button
 lastAutoholdPressed    # autohold button edge detector
 autoholdActive         # autohold currently holding the brake
 brakePedal             # effective/proxied brake pedal (0-1)
+absEnabled             # ABS on/off, default on
+lastABSPressed         # ABS button edge detector
 ```
 
 #### Button handling
@@ -354,6 +366,13 @@ Autohold mode (latching):
   `autoholdActive = false`
 - always update `lastAutoholdPressed` each tick, even while powered off, so
   holding the button through a power cycle does not create a false edge later
+
+ABS (latching, default on):
+
+- on the rising edge of `Btn_ABS.is_pressed`, toggle `absEnabled`
+- a held button does not repeat
+- the state is not reset on power off; ABS comes back in whatever state it was
+  left in
 
 #### Autohold activation
 
@@ -397,15 +416,59 @@ brake pedal access"; Power, Transmission, and Engine read it instead of
 `Steering_Wheel.left_pedal`. Brake is evaluated before Transmission and Engine,
 so those see the current tick; Power runs first, so it sees the previous tick.
 
+#### ABS
+
+Stateless four-channel bang-bang ABS: everything is recomputed every tick, with
+no per-wheel latch. The fastest wheel is the speed reference; any wheel below
+the target speed has its brake fully released to `0` for that tick.
+
+Reference speed and run condition each tick:
+
+```txt
+refSpeed = max(abs(Wheel_FL.rps), abs(Wheel_FR.rps),
+               abs(Wheel_RL.rps), abs(Wheel_RR.rps))
+
+absRunning = absEnabled
+             && (brakePedal > ABS_MIN_BRAKE)
+             && (refSpeed > ABS_MIN_SPEED_RPS)
+```
+
+Per-wheel factor (same logic for FL, FR, RL, RR):
+
+```txt
+absTargetSpeed = ABS_TARGET_SPEED_RATIO * refSpeed
+
+if (absRunning && (absSpeedX < absTargetSpeed)):
+    absFactorX = 0.0    # fully release this wheel
+else:
+    absFactorX = 1.0    # normal braking
+```
+
+- this is bang-bang: full pressure or nothing, no partial ramp
+- the fastest wheel has `speed = refSpeed`, which is above the target, so it
+  keeps full pressure and does not brake itself loose
+- there is no hysteresis, so a wheel hovering at the threshold can chatter; add
+  a recover threshold if that shows up in testing
+
+`absTriggered` is a per-tick local, not persistent:
+
+```txt
+absTriggered = (absFactorFL == 0) || (absFactorFR == 0)
+            || (absFactorRL == 0) || (absFactorRR == 0)
+```
+
 #### Brake pressures
 
-- Front: `ASM_Brake_FL.input = ASM_Brake_FR.input = brakePedal`
-- Rear: `ASM_Brake_RL.input = ASM_Brake_RR.input = brakePedal * REAR_BRAKE_RATIO`
-- Handbrake override: if `handbrakeActive`, both rear values become `1.0`
+- Front base: `brakePedal`
+- Rear base: `brakePedal * REAR_BRAKE_RATIO`, or `1.0` when `handbrakeActive`
   (bypassing the ratio; front is unaffected)
-- no clamping is needed: the pedal is in `[0, 1]` and `REAR_BRAKE_RATIO < 1`
+- ABS: each wheel output is multiplied by its `absFactorX`
+- so `FL = frontBase * absFactorFL`, `FR = frontBase * absFactorFR`,
+  `RL = rearBase * absFactorRL`, `RR = rearBase * absFactorRR`
+- no clamping is needed: the pedal is in `[0, 1]`, `REAR_BRAKE_RATIO < 1`, and
+  each ABS factor is in `[0, 1]`
 
-Resulting combinations:
+Base combinations (before ABS modulation):
 
 - pedal only: front = pedal, rear = pedal * 3/7
 - handbrake only: front = 0, rear = 1.0
@@ -419,13 +482,20 @@ Resulting combinations:
 - `Btn_Autohold.is_illuminated = autoholdEnabled && powerState > 0`
   - the autohold light reflects the mode being enabled, not the momentary
     `autoholdActive` hold state
+- `Btn_ABS.is_illuminated = (!absEnabled) || absTriggered`
+  - on when ABS is disabled or a wheel is being modulated this tick
 
 #### Interactions / caveats
 
 - `handbrakeActive` initializes to `true`, so the rear brakes are engaged at
   script load until the handbrake button releases them.
-- `Btn_Handbrake` and `Btn_Autohold` databus paths are documented here but are
-  not yet in `Golf_GTI_MK8.json`; add them before testing.
-- ABS is still TODO; locking the rear wheels with the handbrake at speed can
-  make the car unstable.
+- ABS needs at least one wheel turning faster than the others: if all four lock
+  at once the reference speed collapses and slip cannot be detected. A
+  held/decaying reference is the next step if this matters.
+- pure handbrake use does not trigger ABS, because ABS requires
+  `brakePedal > ABS_MIN_BRAKE`
+- ABS reads all four wheel rps under nested `requires`; if any wheel is
+  unavailable, `absRunning` is false and every factor is `1.0`
+- bang-bang release has no hysteresis, so wheel pressure can chatter around the
+  threshold; tune `ABS_TARGET_SPEED_RATIO` or add a recover threshold if needed
 
