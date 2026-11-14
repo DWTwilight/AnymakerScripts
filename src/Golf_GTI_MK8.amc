@@ -244,7 +244,10 @@ define function engine_on_tick ()
 				call clamp (var rawMinimal, var MIN_IDLE_THROTTLE, var MAX_IDLE_THROTTLE, var rawThrottle)
 				requires (out Gearbox.clutch_factor)
 				{
-					var rawThrottle = var rawThrottle + (1.0 - var rawThrottle) * out Steering_Wheel.right_pedal * out Gearbox.clutch_factor
+					if (! (var antiStall))
+					{
+						var rawThrottle = var rawThrottle + (1.0 - var rawThrottle) * out Steering_Wheel.right_pedal * out Gearbox.clutch_factor
+					}
 				}
 				call clamp (var rawThrottle, var MIN_IDLE_THROTTLE, 1.0, var throttleValue)
 			}

@@ -225,7 +225,7 @@ MIN_IDLE_THROTTLE = 0.05
        - `minimalThrottle = (IDLE_RPS - Engine.rps) * 0.2`
        - clamp `minimalThrottle` to `[MIN_IDLE_THROTTLE, 1.0]`
        - this is 1.0 for all `Engine.rps <= 8.5`, so cranking naturally gets full throttle
-    2. apply pedal input:
+    2. apply pedal input (skipped while `antiStall` is active):
        - `engineThrottle = minimalThrottle + (1.0 - minimalThrottle) * pedalInput`
        - clamp `engineThrottle` to `[MIN_IDLE_THROTTLE, 1.0]`
     3. set `ASM_Throttle.input` -> `engineThrottle`
