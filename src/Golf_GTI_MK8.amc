@@ -253,16 +253,27 @@ define function transmission_on_tick ()
 		}
 		elseif (out Gear_Stick.throttle == 2)
 		{
-			# TODO: impl auto mode
-			if (var targetGear < 1)
+			# drive
+			if (! (var lastGearMode == 2))
 			{
-				var antiStall = true
+				# from other modes to drive
+				if (var targetGear < 1)
+				{
+					# not manual
+					var antiStall = true
+					var targetGear = 1
+				}
 			}
-			var targetGear = 1
+			else
+			{
+				# already in drive
+				# TODO: impl auto mode
+				var targetGear = 1
+			}
 		}
 		elseif (out Gear_Stick.throttle == 3)
 		{
-			# manual mode
+			# manual
 			if (! (var lastGearMode == 3))
 			{
 				# from other modes to manual
