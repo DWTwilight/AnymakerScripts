@@ -20,13 +20,13 @@ actually hosts the folder:
 2. Install into Windows VS Code (local folder):
 
    ```sh
-   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.22.0.vsix")" --force
+   cmd.exe /c code --install-extension "$(wslpath -w "$PWD/anymaker-scripting-0.23.0.vsix")" --force
    ```
 
    Or, inside a Remote-WSL window, use the integrated terminal:
 
    ```sh
-   code --install-extension "$PWD/anymaker-scripting-0.22.0.vsix" --force
+   code --install-extension "$PWD/anymaker-scripting-0.23.0.vsix" --force
    ```
 
 3. Reload VS Code.
@@ -61,7 +61,9 @@ uses `Foo.json` from the same folder.
 
 The schema drives validation (unknown paths, wrong direction, type mismatches),
 completion after `in`/`out`, and hover type/description. Edits to the JSON are
-picked up live.
+picked up live, including unsaved edits in the open editor and external file
+changes. JSONC-style comments and trailing commas are tolerated; an invalid
+schema is reported as a warning on the script.
 
 Guard databus access with `requires (in|out Path.name) { ... }`; a missing or
 destroyed variable can fail the whole script.

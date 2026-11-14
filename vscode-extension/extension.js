@@ -8,7 +8,7 @@ const { foldingRanges } = require('./folding');
 const { lookupHover } = require('./hover');
 const { registerIntellisense } = require('./intellisense');
 const { getModel, isExcluded, databusContextAt, unusedDeclarations } = require('./model');
-const { loadSchema, clearSchema } = require('./databus');
+const { loadSchema, clearAllSchemas, getSchemaError } = require('./databus');
 const { getConstants, clearConstants } = require('./constants');
 const { formatText } = require('./format');
 
@@ -117,6 +117,12 @@ async function refreshDiagnostics(document) {
   } catch (error) {
     return;
   }
+
+  const schemaError = getSchemaError(document);
+  if (schemaError) {
+    result.push({ start: 0, end: 0, message: schemaError, severity: 'warning' });
+  }
+
   checked.set(key, result);
   const items = result.map((item) => {
     const range = new vscode.Range(document.positionAt(item.start), document.positionAt(item.end));
@@ -140,10 +146,10 @@ function refresh(document) {
 
 function handleSchemaFile(uri) {
   if (!/\.json$/i.test(uri.path)) return;
-  clearSchema(uri);
-  const amcUri = uri.with({ path: uri.path.replace(/\.json$/i, '.amc') });
+  if (/[\\/](node_modules|\.git)[\\/]/.test(uri.path)) return;
+  clearAllSchemas();
   for (const document of vscode.workspace.textDocuments) {
-    if (document.uri.toString() === amcUri.toString()) refreshDiagnostics(document);
+    if (document.languageId === 'anymaker') refreshDiagnostics(document);
   }
 }
 
@@ -219,8 +225,14 @@ async function provideDatabusHover(document, context) {
     markdown.appendMarkdown('\n\n');
     markdown.appendText(entry.description);
   } else if (!schema) {
-    const base = document.uri.path.split('/').pop().replace(/\.amc$/i, '.json');
-    markdown.appendMarkdown(`\n\nNo matching \`${base}\` databus schema found.`);
+    const error = getSchemaError(document);
+    if (error) {
+      markdown.appendMarkdown('\n\n**Schema error:** ');
+      markdown.appendText(error);
+    } else {
+      const base = document.uri.path.split('/').pop().replace(/\.amc$/i, '.json');
+      markdown.appendMarkdown(`\n\nNo matching \`${base}\` databus schema found.`);
+    }
   } else {
     markdown.appendMarkdown(`\n\nUnknown databus '${context.direction}' path.`);
   }
@@ -393,6 +405,14 @@ function activate(context) {
   diagnostics = vscode.languages.createDiagnosticCollection('anymaker');
   context.subscriptions.push(diagnostics);
   context.subscriptions.push(...registerIntellisense());
+
+  const schemaWatcher = vscode.workspace.createFileSystemWatcher('**/*.json');
+  context.subscriptions.push(
+    schemaWatcher,
+    schemaWatcher.onDidChange(handleSchemaFile),
+    schemaWatcher.onDidCreate(handleSchemaFile),
+    schemaWatcher.onDidDelete(handleSchemaFile)
+  );
 
   rebuildTypes();
   for (const document of vscode.workspace.textDocuments) refreshDiagnostics(document);
