@@ -269,8 +269,6 @@ side. A right turn gives `Right = +inner`, `Left = -outer`; a left turn gives
 
 TODO:
 - ABS
-- Handbrake
-- Autohold
 
 ### Databus Inputs (Out Variables)
 
@@ -289,6 +287,12 @@ TODO:
 - Wheel_RR.rps
   - Fractional
   - RR Wheel rps
+- Btn_Handbrake.is_pressed
+  - Boolean
+  - digital handbrake button
+- Btn_Autohold.is_pressed
+  - Boolean
+  - autohold button
 
 ### Databus Outputs (In Variables)
 
@@ -304,6 +308,124 @@ TODO:
 - ASM_Brake_RR.input
   - Fractional
   - RR brake force, 0(no brake) -> 1(full brake)
+- Btn_Handbrake.is_illuminated
+  - Boolean
+  - digital handbrake button light switch
+- Btn_Autohold.is_illuminated
+  - Boolean
+  - autohold button light switch
 
 ### Logic
+
+#### Constants
+
+- `REAR_BRAKE_RATIO = 3.0 / 7.0`
+  - rear pressure per unit of front pressure, from `front:rear = 7:3`
+  - front is the reference (gets the full proxy pedal); rear is proportional
+- `AUTOHOLD_STOP_RPS = 0.1`
+  - `abs(wheel.rps)` below this counts as a stopped wheel
+- `AUTOHOLD_RELEASE_THROTTLE = 0.1`
+  - driver throttle above this releases autohold
+
+#### Global state
+
+```txt
+handbrakeActive        # latched parking-brake state
+lastHandbrakePressed   # handbrake button edge detector
+autoholdEnabled        # autohold mode, toggled by button
+lastAutoholdPressed    # autohold button edge detector
+autoholdActive         # autohold currently holding the brake
+brakePedal             # effective/proxied brake pedal (0-1)
+```
+
+#### Button handling
+
+Handbrake (latching, like an electronic parking brake):
+
+- on the rising edge of `Btn_Handbrake.is_pressed`, toggle `handbrakeActive`
+- a held button does not repeat; same edge pattern as `btnStartStopPressFlag`
+- allowed regardless of power, because the light is independently power-gated
+
+Autohold mode (latching):
+
+- only toggled when `powerState > 0`
+- on the rising edge of `Btn_Autohold.is_pressed`, toggle `autoholdEnabled`
+- when `powerState == 0`, force `autoholdEnabled = false` and
+  `autoholdActive = false`
+- always update `lastAutoholdPressed` each tick, even while powered off, so
+  holding the button through a power cycle does not create a false edge later
+
+#### Autohold activation
+
+Only evaluated while `autoholdEnabled` and `powerState > 0`:
+
+1. if driver throttle `Steering_Wheel.right_pedal > AUTOHOLD_RELEASE_THROTTLE`,
+   set `autoholdActive = false`
+2. elseif all four wheels are stopped, set `autoholdActive = true`:
+   - `abs(Wheel_FL.rps) < AUTOHOLD_STOP_RPS`
+   - `abs(Wheel_FR.rps) < AUTOHOLD_STOP_RPS`
+   - `abs(Wheel_RL.rps) < AUTOHOLD_STOP_RPS`
+   - `abs(Wheel_RR.rps) < AUTOHOLD_STOP_RPS`
+3. otherwise keep the previous `autoholdActive` state
+
+Additional rules:
+
+- when `autoholdEnabled` is false, force `autoholdActive = false`
+- use `abs(...)`: wheel rps is signed (negative in reverse), so a raw
+  `rps < 0.1` test would always be true while reversing
+- read all four wheels inside nested `requires` guards; if any wheel is
+  unavailable, skip activation instead of failing the script
+- use the driver pedal, not `ASM_Throttle.input`; idle/anti-stall control can
+  raise the actual throttle above 0.1 with no driver input
+- activation does not require the brake pedal, so the car also holds after
+  coasting to a stop; requiring `left_pedal > 0.05` is a possible refinement,
+  but it is not part of this design
+
+#### Brake proxy
+
+`brakePedal` is the single value all brake pressures are derived from:
+
+```txt
+brakePedal = Steering_Wheel.left_pedal
+if autoholdActive:
+    brakePedal = 1.0
+```
+
+This makes autohold behave as if the driver keeps the pedal fully pressed,
+while the real pedal input is ignored. It is the single proxy for "current
+brake pedal access"; Power, Transmission, and Engine read it instead of
+`Steering_Wheel.left_pedal`. Brake is evaluated before Transmission and Engine,
+so those see the current tick; Power runs first, so it sees the previous tick.
+
+#### Brake pressures
+
+- Front: `ASM_Brake_FL.input = ASM_Brake_FR.input = brakePedal`
+- Rear: `ASM_Brake_RL.input = ASM_Brake_RR.input = brakePedal * REAR_BRAKE_RATIO`
+- Handbrake override: if `handbrakeActive`, both rear values become `1.0`
+  (bypassing the ratio; front is unaffected)
+- no clamping is needed: the pedal is in `[0, 1]` and `REAR_BRAKE_RATIO < 1`
+
+Resulting combinations:
+
+- pedal only: front = pedal, rear = pedal * 3/7
+- handbrake only: front = 0, rear = 1.0
+- autohold only: front = 1.0, rear = 3/7
+- handbrake + autohold: front = 1.0, rear = 1.0
+- handbrake + pedal: front = pedal, rear = 1.0
+
+#### Button lights
+
+- `Btn_Handbrake.is_illuminated = handbrakeActive && powerState > 0`
+- `Btn_Autohold.is_illuminated = autoholdEnabled && powerState > 0`
+  - the autohold light reflects the mode being enabled, not the momentary
+    `autoholdActive` hold state
+
+#### Interactions / caveats
+
+- `handbrakeActive` initializes to `true`, so the rear brakes are engaged at
+  script load until the handbrake button releases them.
+- `Btn_Handbrake` and `Btn_Autohold` databus paths are documented here but are
+  not yet in `Golf_GTI_MK8.json`; add them before testing.
+- ABS is still TODO; locking the rear wheels with the handbrake at speed can
+  make the car unstable.
 

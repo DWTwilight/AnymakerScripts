@@ -72,6 +72,14 @@
             "type": "fractional",
             "description": "RR brake force, 0 (no brake) -> 1 (full brake)"
         },
+        "Btn_Handbrake.is_illuminated": {
+            "type": "bool",
+            "description": "Digital handbrake button light"
+        },
+        "Btn_Autohold.is_illuminated": {
+            "type": "bool",
+            "description": "Autohold button light"
+        },
         "ASM_Gearbox.input": {
             "type": "fractional",
             "description": "Gearbox shift pulse: above 0.75 shifts up, below -0.75 shifts down"
@@ -177,6 +185,14 @@
         "Wheel_RR.rps": {
             "type": "fractional",
             "description": "RR wheel rps"
+        },
+        "Btn_Handbrake.is_pressed": {
+            "type": "bool",
+            "description": "Digital handbrake button pressed"
+        },
+        "Btn_Autohold.is_pressed": {
+            "type": "bool",
+            "description": "Autohold button pressed"
         }
     }
 }

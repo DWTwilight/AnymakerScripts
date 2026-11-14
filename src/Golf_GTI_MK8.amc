@@ -44,6 +44,18 @@ var ANTI_STALL_RPS = 9.0
 define var fractional ANTI_STALL_RECOVER_BRAKE
 var ANTI_STALL_RECOVER_BRAKE = 0.01
 
+# rear/front brake ratio (3/7)
+define var fractional REAR_BRAKE_RATIO
+var REAR_BRAKE_RATIO = 3.0 / 7.0
+
+# autohold stop speed (rps)
+define var fractional AUTOHOLD_STOP_RPS
+var AUTOHOLD_STOP_RPS = 0.1
+
+# autohold release throttle
+define var fractional AUTOHOLD_RELEASE_THROTTLE
+var AUTOHOLD_RELEASE_THROTTLE = 0.1
+
 
 # Shared Globals
 
@@ -73,6 +85,31 @@ var gearboxPulseCooldown = false
 # anti-stall active flag
 define var bool antiStall
 var antiStall = false
+
+# handbrake latched state
+# init to true
+define var bool handbrakeActive
+var handbrakeActive = true
+
+# handbrake btn last state
+define var bool lastHandbrakePressed
+var lastHandbrakePressed = false
+
+# autohold mode enabled
+define var bool autoholdEnabled
+var autoholdEnabled = false
+
+# autohold btn last state
+define var bool lastAutoholdPressed
+var lastAutoholdPressed = false
+
+# autohold holding brake
+define var bool autoholdActive
+var autoholdActive = false
+
+# effective brake pedal (0-1)
+define var fractional brakePedal
+var brakePedal = 0.0
 
 # bool -> 1.0 / 0.0
 define function bool_to_fraction (bool value, fractional result)
@@ -113,39 +150,36 @@ define function power_on_tick ()
 {
 	requires (out Btn_Start_Stop.is_pressed)
 	{
-		requires (out Steering_Wheel.left_pedal)
+		if (out Btn_Start_Stop.is_pressed && ! (var btnStartStopPressFlag))
 		{
-			if (out Btn_Start_Stop.is_pressed && ! (var btnStartStopPressFlag))
+			if (var powerState == 0)
 			{
-				if (var powerState == 0)
+				if (var brakePedal > 0.5)
 				{
-					if (out Steering_Wheel.left_pedal > 0.5)
-					{
-						var powerState = 2
-					}
-					else
-					{
-						var powerState = 1
-					}
+					var powerState = 2
 				}
-				elseif (var powerState == 1)
+				else
 				{
-					if (out Steering_Wheel.left_pedal > 0.5)
-					{
-						var powerState = 2
-					}
-					else
-					{
-						var powerState = 0
-					}
+					var powerState = 1
 				}
-				elseif (var powerState == 2)
+			}
+			elseif (var powerState == 1)
+			{
+				if (var brakePedal > 0.5)
+				{
+					var powerState = 2
+				}
+				else
 				{
 					var powerState = 0
 				}
 			}
-			var btnStartStopPressFlag = out Btn_Start_Stop.is_pressed
+			elseif (var powerState == 2)
+			{
+				var powerState = 0
+			}
 		}
+		var btnStartStopPressFlag = out Btn_Start_Stop.is_pressed
 	}
 
 	define var bool mainOn
@@ -203,12 +237,9 @@ define function engine_on_tick ()
 				call bool_to_fraction (out Engine.rps < var STARTER_CUTOFF_RPS, var starterValue)
 
 				var rawMinimal = (var IDLE_RPS - out Engine.rps) * 0.2
-				requires (out Steering_Wheel.left_pedal)
+				if (! (var targetGear == 0) && (var brakePedal > var ANTI_STALL_RECOVER_BRAKE) && ! (var antiStall))
 				{
-					if (! (var targetGear == 0) && (out Steering_Wheel.left_pedal > var ANTI_STALL_RECOVER_BRAKE) && ! (var antiStall))
-					{
-						var rawMinimal = var MIN_IDLE_THROTTLE
-					}
+					var rawMinimal = var MIN_IDLE_THROTTLE
 				}
 				call clamp (var rawMinimal, var MIN_IDLE_THROTTLE, var MAX_IDLE_THROTTLE, var rawThrottle)
 				requires (out Gearbox.clutch_factor)
@@ -322,12 +353,9 @@ define function transmission_on_tick ()
 
 	if (var antiStall)
 	{
-		requires (out Steering_Wheel.left_pedal)
+		if (var brakePedal < var ANTI_STALL_RECOVER_BRAKE)
 		{
-			if (out Steering_Wheel.left_pedal < var ANTI_STALL_RECOVER_BRAKE)
-			{
-				var antiStall = false
-			}
+			var antiStall = false
 		}
 	}
 	if (! (var targetGear == 0) && ! (var antiStall))
@@ -415,29 +443,110 @@ define function transmission_on_tick ()
 # brake logic
 define function brake_on_tick ()
 {
-	define var fractional brakeValue
-	var brakeValue = 0.0
-
-	requires (out Steering_Wheel.left_pedal)
+	# handbrake button (latching)
+	requires (out Btn_Handbrake.is_pressed)
 	{
-		call clamp (out Steering_Wheel.left_pedal, 0.0, 1.0, var brakeValue)
+		if (out Btn_Handbrake.is_pressed && ! (var lastHandbrakePressed))
+		{
+			var handbrakeActive = ! (var handbrakeActive)
+		}
+		var lastHandbrakePressed = out Btn_Handbrake.is_pressed
 	}
 
+	# autohold reset on power off
+	if (var powerState == 0)
+	{
+		var autoholdEnabled = false
+		var autoholdActive = false
+	}
+
+	# autohold button (latching)
+	requires (out Btn_Autohold.is_pressed)
+	{
+		if ((var powerState > 0) && out Btn_Autohold.is_pressed && ! (var lastAutoholdPressed))
+		{
+			var autoholdEnabled = ! (var autoholdEnabled)
+		}
+		var lastAutoholdPressed = out Btn_Autohold.is_pressed
+	}
+
+	# autohold activation
+	if (! (var autoholdEnabled))
+	{
+		var autoholdActive = false
+	}
+	elseif (var powerState > 0)
+	{
+		requires (out Steering_Wheel.right_pedal)
+		{
+			if (out Steering_Wheel.right_pedal > var AUTOHOLD_RELEASE_THROTTLE)
+			{
+				var autoholdActive = false
+			}
+			else
+			{
+				requires (out Wheel_FL.rps)
+				{
+					requires (out Wheel_FR.rps)
+					{
+						requires (out Wheel_RL.rps)
+						{
+							requires (out Wheel_RR.rps)
+							{
+								if ((abs (out Wheel_FL.rps) < var AUTOHOLD_STOP_RPS) && (abs (out Wheel_FR.rps) < var AUTOHOLD_STOP_RPS) && (abs (out Wheel_RL.rps) < var AUTOHOLD_STOP_RPS) && (abs (out Wheel_RR.rps) < var AUTOHOLD_STOP_RPS))
+								{
+									var autoholdActive = true
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	# brake pedal proxy
+	requires (out Steering_Wheel.left_pedal)
+	{
+		var brakePedal = out Steering_Wheel.left_pedal
+	}
+	if (var autoholdActive)
+	{
+		var brakePedal = 1.0
+	}
+
+	# brake pressures
+	define var fractional rearPressure
+	var rearPressure = var brakePedal * var REAR_BRAKE_RATIO
+	if (var handbrakeActive)
+	{
+		var rearPressure = 1.0
+	}
 	requires (in ASM_Brake_FL.input)
 	{
-		in ASM_Brake_FL.input = var brakeValue
+		in ASM_Brake_FL.input = var brakePedal
 	}
 	requires (in ASM_Brake_FR.input)
 	{
-		in ASM_Brake_FR.input = var brakeValue
+		in ASM_Brake_FR.input = var brakePedal
 	}
 	requires (in ASM_Brake_RL.input)
 	{
-		in ASM_Brake_RL.input = var brakeValue
+		in ASM_Brake_RL.input = var rearPressure
 	}
 	requires (in ASM_Brake_RR.input)
 	{
-		in ASM_Brake_RR.input = var brakeValue
+		in ASM_Brake_RR.input = var rearPressure
+	}
+
+	# button lights
+	requires (in Btn_Handbrake.is_illuminated)
+	{
+		in Btn_Handbrake.is_illuminated = (var handbrakeActive) && (var powerState > 0)
+	}
+	requires (in Btn_Autohold.is_illuminated)
+	{
+		in Btn_Autohold.is_illuminated = (var autoholdEnabled) && (var powerState > 0)
 	}
 }
 
@@ -558,9 +667,9 @@ define function door_lock_on_tick ()
 on_tick
 {
 	call power_on_tick ()
+	call brake_on_tick ()
 	call transmission_on_tick ()
 	call engine_on_tick ()
-	call brake_on_tick ()
 	call steering_on_tick ()
 	call door_lock_on_tick ()
 }
