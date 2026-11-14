@@ -40,6 +40,18 @@
             "type": "bool",
             "description": "Backlight on/off"
         },
+        "Dial_RPM.display_value": {
+            "type": "fractional",
+            "description": "RPM dial needle, -1 (0 rps) to 1 (150 rps)"
+        },
+        "Dial_Speed.display_value": {
+            "type": "fractional",
+            "description": "Speed dial needle, -1 (0 km/h) to 1 (240 km/h)"
+        },
+        "Display_Gear.display_value": {
+            "type": "fractional",
+            "description": "Gear display: 0 neutral, 1-6 forward, 9 reverse"
+        },
         "ASM_Power_Main.input": {
             "type": "fractional",
             "description": "Main Power Relay (1 -> on)"

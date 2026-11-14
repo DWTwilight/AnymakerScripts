@@ -24,6 +24,14 @@ var WHEEL_BASE = 2.72
 define var fractional TRACK_WIDTH
 var TRACK_WIDTH = 1.52
 
+# wheel radius (m)
+define var fractional WHEEL_RADIUS
+var WHEEL_RADIUS = 0.33
+
+# pi
+define var fractional PI
+var PI = 3.14159265
+
 # max virtual steer angle (rad)
 define var fractional MAX_VIRTUAL_STEER_ANG
 var MAX_VIRTUAL_STEER_ANG = 0.5236
@@ -67,6 +75,14 @@ var ABS_TARGET_SPEED_RATIO = 0.8
 # abs min reference speed
 define var fractional ABS_MIN_SPEED_RPS
 var ABS_MIN_SPEED_RPS = 0.5
+
+# rpm dial max (rps)
+define var fractional DIAL_RPM_MAX
+var DIAL_RPM_MAX = 150.0
+
+# speed dial max (km/h)
+define var fractional DIAL_SPEED_MAX
+var DIAL_SPEED_MAX = 240.0
 
 
 # Globals
@@ -165,6 +181,20 @@ define function clamp (fractional inputValue, fractional minValue, fractional ma
 	}
 }
 
+# map value range to -1..1
+define function dial_map (fractional dialInput, fractional dialMin, fractional dialMax, fractional dialResult)
+{
+	param dialResult = (param dialInput - param dialMin) / (param dialMax - param dialMin) * 2.0 - 1.0
+	if (param dialResult < -1.0)
+	{
+		param dialResult = -1.0
+	}
+	elseif (param dialResult > 1.0)
+	{
+		param dialResult = 1.0
+	}
+}
+
 # power state machine
 define function power_on_tick ()
 {
@@ -245,9 +275,9 @@ define function engine_on_tick ()
 	var starterValue = 0.0
 	var throttleValue = 0.0
 
-	if (var powerState == 2)
+	requires (out Engine.rps)
 	{
-		requires (out Engine.rps)
+		if (var powerState == 2)
 		{
 			requires (out Steering_Wheel.right_pedal)
 			{
@@ -271,6 +301,13 @@ define function engine_on_tick ()
 				}
 				call clamp (var rawThrottle, var MIN_IDLE_THROTTLE, 1.0, var throttleValue)
 			}
+		}
+		# rpm dial
+		define var fractional rpmDial
+		call dial_map (out Engine.rps, 0.0, var DIAL_RPM_MAX, var rpmDial)
+		requires (in Dial_RPM.display_value)
+		{
+			in Dial_RPM.display_value = var rpmDial
 		}
 	}
 
@@ -461,6 +498,18 @@ define function transmission_on_tick ()
 	{
 		in ASM_Gearbox.input = var gearboxCommand
 	}
+
+	# gear display
+	define var fractional gearDisplay
+	var gearDisplay = 9.0
+	if (! (var targetGear == -1))
+	{
+		var gearDisplay = to_fractional (var targetGear)
+	}
+	requires (in Display_Gear.display_value)
+	{
+		in Display_Gear.display_value = var gearDisplay
+	}
 }
 
 # brake logic
@@ -503,6 +552,33 @@ define function brake_on_tick ()
 		var lastABSPressed = out Btn_ABS.is_pressed
 	}
 
+	# wheel speed (rps)
+	define var fractional wheelFlSpeed
+	define var fractional wheelFrSpeed
+	define var fractional wheelRlSpeed
+	define var fractional wheelRrSpeed
+	var wheelFlSpeed = 0.0
+	var wheelFrSpeed = 0.0
+	var wheelRlSpeed = 0.0
+	var wheelRrSpeed = 0.0
+
+	requires (out Wheel_FL.rps)
+	{
+		requires (out Wheel_FR.rps)
+		{
+			requires (out Wheel_RL.rps)
+			{
+				requires (out Wheel_RR.rps)
+				{
+					var wheelFlSpeed = abs (out Wheel_FL.rps)
+					var wheelFrSpeed = abs (out Wheel_FR.rps)
+					var wheelRlSpeed = abs (out Wheel_RL.rps)
+					var wheelRrSpeed = abs (out Wheel_RR.rps)
+				}
+			}
+		}
+	}
+
 	# autohold activation
 	if (! (var autoholdEnabled))
 	{
@@ -518,21 +594,9 @@ define function brake_on_tick ()
 			}
 			else
 			{
-				requires (out Wheel_FL.rps)
+				if ((var wheelFlSpeed < var AUTOHOLD_STOP_RPS) && (var wheelFrSpeed < var AUTOHOLD_STOP_RPS) && (var wheelRlSpeed < var AUTOHOLD_STOP_RPS) && (var wheelRrSpeed < var AUTOHOLD_STOP_RPS))
 				{
-					requires (out Wheel_FR.rps)
-					{
-						requires (out Wheel_RL.rps)
-						{
-							requires (out Wheel_RR.rps)
-							{
-								if ((abs (out Wheel_FL.rps) < var AUTOHOLD_STOP_RPS) && (abs (out Wheel_FR.rps) < var AUTOHOLD_STOP_RPS) && (abs (out Wheel_RL.rps) < var AUTOHOLD_STOP_RPS) && (abs (out Wheel_RR.rps) < var AUTOHOLD_STOP_RPS))
-								{
-									var autoholdActive = true
-								}
-							}
-						}
-					}
+					var autoholdActive = true
 				}
 			}
 		}
@@ -549,13 +613,11 @@ define function brake_on_tick ()
 	}
 
 	# abs
-	define var fractional absRefSpeed
 	define var fractional absFactorFL
 	define var fractional absFactorFR
 	define var fractional absFactorRL
 	define var fractional absFactorRR
 	define var bool absTriggered
-	var absRefSpeed = 0.0
 	var absFactorFL = 1.0
 	var absFactorFR = 1.0
 	var absFactorRL = 1.0
@@ -564,56 +626,55 @@ define function brake_on_tick ()
 
 	if ((var absEnabled) && (var brakePedal > var ABS_MIN_BRAKE))
 	{
-		requires (out Wheel_FL.rps)
+		define var fractional absRefSpeed
+		var absRefSpeed = var wheelFlSpeed
+		if (var wheelFrSpeed > var absRefSpeed)
 		{
-			requires (out Wheel_FR.rps)
-			{
-				requires (out Wheel_RL.rps)
-				{
-					requires (out Wheel_RR.rps)
-					{
-						var absRefSpeed = abs (out Wheel_FL.rps)
-						if (abs (out Wheel_FR.rps) > var absRefSpeed)
-						{
-							var absRefSpeed = abs (out Wheel_FR.rps)
-						}
-						if (abs (out Wheel_RL.rps) > var absRefSpeed)
-						{
-							var absRefSpeed = abs (out Wheel_RL.rps)
-						}
-						if (abs (out Wheel_RR.rps) > var absRefSpeed)
-						{
-							var absRefSpeed = abs (out Wheel_RR.rps)
-						}
-
-						if (var absRefSpeed > var ABS_MIN_SPEED_RPS)
-						{
-							define var fractional absTargetSpeed
-							var absTargetSpeed = var ABS_TARGET_SPEED_RATIO * var absRefSpeed
-
-							if (abs (out Wheel_FL.rps) < var absTargetSpeed)
-							{
-								var absFactorFL = 0.0
-							}
-							if (abs (out Wheel_FR.rps) < var absTargetSpeed)
-							{
-								var absFactorFR = 0.0
-							}
-							if (abs (out Wheel_RL.rps) < var absTargetSpeed)
-							{
-								var absFactorRL = 0.0
-							}
-							if (abs (out Wheel_RR.rps) < var absTargetSpeed)
-							{
-								var absFactorRR = 0.0
-							}
-
-							var absTriggered = (var absFactorFL == 0.0) || (var absFactorFR == 0.0) || (var absFactorRL == 0.0) || (var absFactorRR == 0.0)
-						}
-					}
-				}
-			}
+			var absRefSpeed = var wheelFrSpeed
 		}
+		if (var wheelRlSpeed > var absRefSpeed)
+		{
+			var absRefSpeed = var wheelRlSpeed
+		}
+		if (var wheelRrSpeed > var absRefSpeed)
+		{
+			var absRefSpeed = var wheelRrSpeed
+		}
+
+		if (var absRefSpeed > var ABS_MIN_SPEED_RPS)
+		{
+			define var fractional absTargetSpeed
+			var absTargetSpeed = var ABS_TARGET_SPEED_RATIO * var absRefSpeed
+
+			if (var wheelFlSpeed < var absTargetSpeed)
+			{
+				var absFactorFL = 0.0
+			}
+			if (var wheelFrSpeed < var absTargetSpeed)
+			{
+				var absFactorFR = 0.0
+			}
+			if (var wheelRlSpeed < var absTargetSpeed)
+			{
+				var absFactorRL = 0.0
+			}
+			if (var wheelRrSpeed < var absTargetSpeed)
+			{
+				var absFactorRR = 0.0
+			}
+
+			var absTriggered = (var absFactorFL == 0.0) || (var absFactorFR == 0.0) || (var absFactorRL == 0.0) || (var absFactorRR == 0.0)
+		}
+	}
+
+	# speed dial
+	define var fractional speedKmh
+	var speedKmh = (var wheelFlSpeed + var wheelFrSpeed + var wheelRlSpeed + var wheelRrSpeed) * 0.25 * 2.0 * var PI * var WHEEL_RADIUS * 3.6
+	define var fractional speedDial
+	call dial_map (var speedKmh, 0.0, var DIAL_SPEED_MAX, var speedDial)
+	requires (in Dial_Speed.display_value)
+	{
+		in Dial_Speed.display_value = var speedDial
 	}
 
 	# brake pressures

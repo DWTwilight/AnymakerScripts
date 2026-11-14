@@ -150,6 +150,9 @@ powerState
 - ASM_Reducer_B.input
   - Fractional
   - Reducer B clutch. 0 -> engaded, 1 -> disengaded
+- Display_Gear.display_value
+  - Fractional
+  - neutral -> 0, drive -> 1-6, reverse -> 9
 
 ### Logic
 
@@ -181,6 +184,9 @@ powerState
 
 #### Impl
 
+- Gear display: `Display_Gear.display_value` = `targetGear` (0 neutral, 1-6
+  forward), or `9` when `targetGear == -1` (reverse)
+
 ## Engine
 
 ### Databus Inputs (Out Variables)
@@ -200,6 +206,9 @@ powerState
 - ASM_Throttle.input
   - Fractional
   - Actual Engine Throttle Input, 0(no Throttle) -> 1(full Throttle)
+- Dial_RPM.display_value
+  - Fractional
+  - -1 - 1, RPS 0 -> -1, RPS 150 -> 1
 
 ### Logic
 
@@ -229,6 +238,10 @@ MIN_IDLE_THROTTLE = 0.05
        - `engineThrottle = minimalThrottle + (1.0 - minimalThrottle) * pedalInput`
        - clamp `engineThrottle` to `[MIN_IDLE_THROTTLE, 1.0]`
     3. set `ASM_Throttle.input` -> `engineThrottle`
+- RPM dial: `Dial_RPM.display_value = dial_map(Engine.rps, 0, DIAL_RPM_MAX)`
+
+`dial_map(input, min, max)` maps `[min, max]` to `[-1, 1]` and clamps the result
+to `[-1, 1]`.
 
 ## Steering
 
@@ -317,6 +330,9 @@ side. A right turn gives `Right = +inner`, `Left = -outer`; a left turn gives
 - Btn_ABS.is_illuminated
   - Boolean
   - abs button light switch
+- Dial_Speed.display_value
+  - Fractional
+  - -1 - 1. 0 km/h -> -1, 240 km/h -> 1
 
 ### Logic
 
@@ -392,8 +408,8 @@ Additional rules:
 - when `autoholdEnabled` is false, force `autoholdActive = false`
 - use `abs(...)`: wheel rps is signed (negative in reverse), so a raw
   `rps < 0.1` test would always be true while reversing
-- read all four wheels inside nested `requires` guards; if any wheel is
-  unavailable, skip activation instead of failing the script
+- read all four wheel speeds once per tick into `abs`-valued locals inside
+  nested `requires`; an unavailable wheel leaves its local at `0.0`
 - use the driver pedal, not `ASM_Throttle.input`; idle/anti-stall control can
   raise the actual throttle above 0.1 with no driver input
 - activation does not require the brake pedal, so the car also holds after
@@ -457,6 +473,21 @@ absTriggered = (absFactorFL == 0) || (absFactorFR == 0)
             || (absFactorRL == 0) || (absFactorRR == 0)
 ```
 
+#### Speed dial
+
+`Dial_Speed.display_value = dial_map(speedKmh, 0, DIAL_SPEED_MAX)`, where
+
+```txt
+avgRps = avg(abs(Wheel_FL.rps), abs(Wheel_FR.rps),
+             abs(Wheel_RL.rps), abs(Wheel_RR.rps))
+speedKmh = avgRps * 2 * PI * WHEEL_RADIUS * 3.6
+```
+
+with `WHEEL_RADIUS = 0.33 m` and `DIAL_SPEED_MAX = 240 km/h`. The wheel speeds
+are the shared `abs`-valued locals, so the dial updates every tick; if wheels
+are unavailable it reads `0.0` (dial at minimum). Taking `abs` makes the
+reading positive in reverse.
+
 #### Brake pressures
 
 - Front base: `brakePedal`
@@ -494,8 +525,10 @@ Base combinations (before ABS modulation):
   held/decaying reference is the next step if this matters.
 - pure handbrake use does not trigger ABS, because ABS requires
   `brakePedal > ABS_MIN_BRAKE`
-- ABS reads all four wheel rps under nested `requires`; if any wheel is
-  unavailable, `absRunning` is false and every factor is `1.0`
+- ABS uses the shared `abs`-valued wheel-rps locals; if wheels are unavailable
+  they stay `0.0`, so `absRefSpeed` is `0` and every factor is `1.0`
+- if a wheel databus is missing its local stays `0.0`, which autohold treats as
+  stopped; add a `wheelsAvailable` guard if missing wheels are possible
 - bang-bang release has no hysteresis, so wheel pressure can chatter around the
   threshold; tune `ABS_TARGET_SPEED_RATIO` or add a recover threshold if needed
 
