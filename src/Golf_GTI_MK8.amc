@@ -52,6 +52,10 @@ var ANTI_STALL_RPS = 9.0
 define var fractional ANTI_STALL_RECOVER_BRAKE
 var ANTI_STALL_RECOVER_BRAKE = 0.01
 
+# launch control throttle
+define var fractional LAUNCH_THROTTLE
+var LAUNCH_THROTTLE = 0.95
+
 # rear/front brake ratio (3/7)
 define var fractional REAR_BRAKE_RATIO
 var REAR_BRAKE_RATIO = 3.0 / 7.0
@@ -227,17 +231,17 @@ define function clamp (fractional inputValue, fractional minValue, fractional ma
 	}
 }
 
-# map value range to -1..1
+# map value range to +-0.95
 define function dial_map (fractional dialInput, fractional dialMin, fractional dialMax, fractional dialResult)
 {
-	param dialResult = (param dialInput - param dialMin) / (param dialMax - param dialMin) * 2.0 - 1.0
-	if (param dialResult < -1.0)
+	param dialResult = (param dialInput - param dialMin) / (param dialMax - param dialMin) * 1.9 - 0.95
+	if (param dialResult < -0.95)
 	{
-		param dialResult = -1.0
+		param dialResult = -0.95
 	}
-	elseif (param dialResult > 1.0)
+	elseif (param dialResult > 0.95)
 	{
-		param dialResult = 1.0
+		param dialResult = 0.95
 	}
 }
 
@@ -547,9 +551,12 @@ define function transmission_on_tick ()
 
 	if (var antiStall)
 	{
-		if (var brakePedal < var ANTI_STALL_RECOVER_BRAKE)
+		requires (out Steering_Wheel.right_pedal)
 		{
-			var antiStall = false
+			if ((var brakePedal < var ANTI_STALL_RECOVER_BRAKE) || (out Steering_Wheel.right_pedal > var LAUNCH_THROTTLE))
+			{
+				var antiStall = false
+			}
 		}
 	}
 	if (! (var targetGear == 0) && ! (var antiStall))
