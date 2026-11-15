@@ -84,6 +84,52 @@ var DIAL_RPM_MAX = 150.0
 define var fractional DIAL_SPEED_MAX
 var DIAL_SPEED_MAX = 240.0
 
+# rpm per rps
+define var fractional RPM_PER_RPS
+var RPM_PER_RPS = 60.0
+
+# upshift curve exponent
+define var fractional SHIFT_CURVE_K
+var SHIFT_CURVE_K = 1.5
+
+# gear ratio step next/current
+define var fractional GEAR_RATIO_STEP
+var GEAR_RATIO_STEP = 0.72
+
+# coasting hysteresis
+define var fractional HYSTERESIS_MAX
+var HYSTERESIS_MAX = 0.15
+
+# full throttle hysteresis
+define var fractional HYSTERESIS_MIN
+var HYSTERESIS_MIN = 0.03
+
+# brake downshift assist min
+define var fractional BRAKE_DOWNSHIFT_MIN
+var BRAKE_DOWNSHIFT_MIN = 0.05
+
+# brake downshift assist gain
+define var fractional BRAKE_DOWNSHIFT_GAIN
+var BRAKE_DOWNSHIFT_GAIN = 0.8
+
+# upshift base rpm, 0 unused
+define list fractional UPSHIFT_BASE
+var UPSHIFT_BASE append (0.0)
+var UPSHIFT_BASE append (1500.0)
+var UPSHIFT_BASE append (1800.0)
+var UPSHIFT_BASE append (2000.0)
+var UPSHIFT_BASE append (2200.0)
+var UPSHIFT_BASE append (2400.0)
+
+# upshift limit rpm, 0 unused
+define list fractional UPSHIFT_LIMIT
+var UPSHIFT_LIMIT append (0.0)
+var UPSHIFT_LIMIT append (3000.0)
+var UPSHIFT_LIMIT append (3500.0)
+var UPSHIFT_LIMIT append (3900.0)
+var UPSHIFT_LIMIT append (4200.0)
+var UPSHIFT_LIMIT append (4400.0)
+
 
 # Globals
 
@@ -195,6 +241,42 @@ define function dial_map (fractional dialInput, fractional dialMin, fractional d
 	}
 }
 
+# upshift rpm by gear
+define function upshift_rpm (integer curGear1, fractional pedalInput1, fractional upShiftRpmResult)
+{
+	param upShiftRpmResult = var UPSHIFT_BASE[param curGear1] + (var UPSHIFT_LIMIT[param curGear1] - var UPSHIFT_BASE[param curGear1]) * (param pedalInput1 ^ var SHIFT_CURVE_K)
+}
+
+# minimal safe downshift gear
+define function downshift_target (integer curGear3, fractional pedalInput3, fractional rpmNow, integer downGearResult)
+{
+	define var integer checkGear
+	define var integer lastGear
+	define var integer exponentGear
+	define var fractional checkUpRpm
+	define var fractional ratioPow
+	define var bool found
+	var checkGear = 1
+	var lastGear = param curGear3 - 1
+	var found = false
+	param downGearResult = param curGear3
+	repeat (var lastGear)
+	{
+		if (! (var found))
+		{
+			call upshift_rpm (var checkGear, param pedalInput3, var checkUpRpm)
+			var exponentGear = param curGear3 - var checkGear
+			var ratioPow = var GEAR_RATIO_STEP ^ to_fractional (var exponentGear)
+			if (param rpmNow < (var checkUpRpm / var RPM_PER_RPS) * var ratioPow * (1.0 - (var HYSTERESIS_MAX - (var HYSTERESIS_MAX - var HYSTERESIS_MIN) * param pedalInput3)))
+			{
+				param downGearResult = var checkGear
+				var found = true
+			}
+		}
+		var checkGear = var checkGear + 1
+	}
+}
+
 # power state machine
 define function power_on_tick ()
 {
@@ -294,10 +376,7 @@ define function engine_on_tick ()
 				call clamp (var rawMinimal, var MIN_IDLE_THROTTLE, var MAX_IDLE_THROTTLE, var rawThrottle)
 				requires (out Gearbox.clutch_factor)
 				{
-					if (! (var antiStall))
-					{
-						var rawThrottle = var rawThrottle + (1.0 - var rawThrottle) * out Steering_Wheel.right_pedal * out Gearbox.clutch_factor
-					}
+					var rawThrottle = var rawThrottle + (1.0 - var rawThrottle) * out Steering_Wheel.right_pedal * (0.2 + 0.8 * out Gearbox.clutch_factor)
 				}
 				call clamp (var rawThrottle, var MIN_IDLE_THROTTLE, 1.0, var throttleValue)
 			}
@@ -357,9 +436,64 @@ define function transmission_on_tick ()
 			}
 			else
 			{
-				# already in drive
-				# TODO: impl auto mode
-				var targetGear = 1
+				if (var antiStall)
+				{
+					var targetGear = 1
+				}
+				else
+				{
+					requires (out Engine.rps)
+					{
+						requires (out Steering_Wheel.right_pedal)
+						{
+							requires (out Gearbox.current_gear)
+							{
+								requires (out Gearbox.target_gear)
+								{
+									requires (out Gearbox.clutch_factor)
+									{
+										if ((out Gearbox.clutch_factor >= 1.0) && (out Gearbox.current_gear == out Gearbox.target_gear) && (var targetGear >= 1) && (var targetGear <= 6))
+										{
+											define var fractional upRpm
+											define var bool canUp
+											define var integer downTargetGear
+											var canUp = false
+											var downTargetGear = var targetGear
+
+											if ((var targetGear < 6) && (var brakePedal <= var BRAKE_DOWNSHIFT_MIN))
+											{
+												call upshift_rpm (var targetGear, out Steering_Wheel.right_pedal, var upRpm)
+												if (out Engine.rps > (var upRpm / var RPM_PER_RPS))
+												{
+													var canUp = true
+												}
+											}
+											if (! (var canUp) && var targetGear > 1)
+											{
+												define var fractional downTheta
+												var downTheta = out Steering_Wheel.right_pedal
+												if ((var brakePedal > var BRAKE_DOWNSHIFT_MIN) && ((var brakePedal * var BRAKE_DOWNSHIFT_GAIN) > var downTheta))
+												{
+													var downTheta = var brakePedal * var BRAKE_DOWNSHIFT_GAIN
+												}
+												call downshift_target (var targetGear, var downTheta, out Engine.rps, var downTargetGear)
+											}
+
+											if (var canUp)
+											{
+												var targetGear = var targetGear + 1
+											}
+											elseif (var downTargetGear < var targetGear)
+											{
+												var targetGear = var downTargetGear
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
 			}
 		}
 		elseif (out Gear_Stick.throttle == 3)

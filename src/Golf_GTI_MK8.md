@@ -187,6 +187,173 @@ powerState
 - Gear display: `Display_Gear.display_value` = `targetGear` (0 neutral, 1-6
   forward), or `9` when `targetGear == -1` (reverse)
 
+#### Drive mode (auto shift)
+
+Automatic up/down shifting is only active in drive (`Gear_Stick.throttle == 2`)
+with the engine running (`powerState == 2`). It picks an effective gear 1-6 and
+writes it to `targetGear`; the existing reducer/gearbox/pulse logic then maps it
+to the physical 3x2 gearbox.
+
+**Inputs**
+
+- `Engine.rps` - engine speed in **rps** (multiply by 60 for RPM)
+- `Steering_Wheel.right_pedal` - driver throttle `theta`, 0-1
+  - use the driver pedal, **not** `ASM_Throttle.input` (that is idle-blended,
+    so it never reaches 0 and would break the coasting shift points)
+- `Gearbox.current_gear` / `Gearbox.target_gear` - physical 0/-1/1/2/3
+- `Gearbox.clutch_factor` - 1 means engaged; < 1 means shifting
+
+**Constants**
+
+```txt
+RPM_PER_RPS        = 60.0
+SHIFT_CURVE_K      = 1.5
+GEAR_RATIO_STEP    = 0.72      # ratio(g+1) / ratio(g), uniform
+HYSTERESIS_MAX     = 0.25      # h at theta = 0
+HYSTERESIS_MIN     = 0.08      # h at theta = 1
+
+# upshift base (theta=0) and limit (theta=1), gears 1..5
+define list fractional UPSHIFT_BASE
+define list fractional UPSHIFT_LIMIT
+```
+
+Per-gear upshift base and full-throttle limit (RPM):
+
+| Gear  | Base (theta=0) | Limit (theta=1) |
+| :---: | :------------: | :-------------: |
+| 1->2  |      1800      |      4000       |
+| 2->3  |      2000      |      4500       |
+| 3->4  |      2200      |      5000       |
+| 4->5  |      2400      |      5500       |
+| 5->6  |      2600      |      6000       |
+
+**Global init (runs once at load)**
+
+```txt
+var UPSHIFT_BASE append (0.0)      # dummy at index 0, unused
+var UPSHIFT_BASE append (1800.0)
+var UPSHIFT_BASE append (2000.0)
+var UPSHIFT_BASE append (2200.0)
+var UPSHIFT_BASE append (2400.0)
+var UPSHIFT_BASE append (2600.0)
+
+var UPSHIFT_LIMIT append (0.0)     # dummy at index 0, unused
+var UPSHIFT_LIMIT append (4000.0)
+var UPSHIFT_LIMIT append (4500.0)
+var UPSHIFT_LIMIT append (5000.0)
+var UPSHIFT_LIMIT append (5500.0)
+var UPSHIFT_LIMIT append (6000.0)
+```
+
+The dummy at index 0 makes the lists 1-based, so gear `g` reads
+`UPSHIFT_BASE[g]` and `UPSHIFT_LIMIT[g]` directly. Index 0 is never used.
+
+**Upshift**
+
+```txt
+RPM_up(g, theta) = UPSHIFT_BASE[g]
+                 + (UPSHIFT_LIMIT[g] - UPSHIFT_BASE[g])
+                 * theta ^ SHIFT_CURVE_K
+```
+
+A flat redline is not used: 1st gear must not be held to 8400 RPM. The per-gear
+limit gives a progressive full-throttle feel and makes the theta = 0 and
+theta = 1 rows exact. `SHIFT_CURVE_K = 1.5` keeps low-throttle shifts early
+while high-throttle shifts rise steeply.
+
+Upshift table (RPM):
+
+|      theta      | 1->2  | 2->3  | 3->4  | 4->5  | 5->6  |
+| :-------------: | :---: | :---: | :---: | :---: | :---: |
+| **0%** (coast)  | 1800  | 2000  | 2200  | 2400  | 2600  |
+|     **10%**     | 1870  | 2079  | 2289  | 2498  | 2708  |
+|     **25%**     | 2075  | 2312  | 2550  | 2788  | 3025  |
+|     **50%**     | 2578  | 2884  | 3190  | 3496  | 3802  |
+|     **75%**     | 3229  | 3624  | 4019  | 4414  | 4808  |
+| **100%** (full) | 4000  | 4500  | 5000  | 5500  | 6000  |
+
+**Downshift**
+
+The downshift threshold is the engine RPM at which the **current (higher)**
+gear is left. It must account for the gear ratio step, otherwise the car
+immediately re-upshifts after the downshift and hunts:
+
+```txt
+h(theta)      = HYSTERESIS_MAX - (HYSTERESIS_MAX - HYSTERESIS_MIN) * theta
+RPM_down(g, theta) = RPM_up(g - 1, theta) * GEAR_RATIO_STEP * (1 - h(theta))
+```
+
+The old-style `RPM_up(g-1) * (1 - h)` values are the **post-shift RPM in the
+lower gear**, not the trigger in the current gear. The trigger is that value
+multiplied by `GEAR_RATIO_STEP`. After a downshift the engine lands at
+`RPM_up(g-1) * (1 - h)`, which is always below the lower gear's upshift point,
+so the design never hunts for any `h > 0`.
+
+Downshift trigger table (RPM, in the **current** gear):
+
+|      theta      | 6->5  | 5->4  | 4->3  | 3->2  | 2->1  |
+| :-------------: | :---: | :---: | :---: | :---: | :---: |
+| **0%** (coast)  | 1404  | 1296  | 1188  | 1080  | 972   |
+|     **10%**     | 1495  | 1380  | 1264  | 1148  | 1032  |
+|     **25%**     | 1726  | 1591  | 1455  | 1320  | 1184  |
+|     **50%**     | 2286  | 2102  | 1918  | 1734  | 1550  |
+|     **75%**     | 3038  | 2788  | 2539  | 2290  | 2040  |
+| **100%** (full) | 3974  | 3643  | 3312  | 2981  | 2650  |
+
+For reference, the resulting post-shift RPM in the lower gear is
+`RPM_up(g-1) * (1 - h)`: for 2->1 that is 1350 RPM at 0% and 3680 RPM at 100%.
+
+**Decision per tick**
+
+```txt
+if (Gear_Stick.throttle == 2) && (antiStall):
+    targetGear = 1
+
+autoAllowed = (Gear_Stick.throttle == 2)
+           && (powerState == 2)
+           && (!antiStall)
+           && (Gearbox.clutch_factor >= 1)
+           && (Gearbox.current_gear == Gearbox.target_gear)
+
+if autoAllowed && targetGear >= 1 && targetGear <= 6:
+    g = targetGear
+    desired = g
+
+    if g < 6 && Engine.rps > RPM_up(g, theta) / RPM_PER_RPS:
+        desired = g + 1
+    elseif g > 1 && Engine.rps < RPM_down(g, theta) / RPM_PER_RPS:
+        desired = g - 1
+
+    if desired != g:
+        targetGear = desired
+```
+
+**Rules / caveats**
+
+- Auto shifting only runs in drive mode; reverse (`targetGear == -1`) and
+  neutral (`targetGear == 0`) are left to the gear-stick handling.
+- While `antiStall` is active in drive mode, force `targetGear = 1` and freeze
+  auto decisions. Anti-stall puts the gearbox in a fake neutral, so `Engine.rps`
+  no longer tracks wheel speed; when it recovers the car resumes in 1st.
+- Freeze while `Gearbox.current_gear != Gearbox.target_gear` or
+  `clutch_factor < 1` (a shift is in progress). The gearbox may jump several
+  gears in a few ticks; the game handles the mechanical jump, so only wait for
+  it to settle rather than sequencing reducer pulses.
+- Decisions are re-evaluated only after the current shift completes
+  (`current_gear == target_gear` and `clutch_factor >= 1`); there is no separate
+  settle timer.
+- All thresholds are in RPM; compare against `Engine.rps` only after dividing
+  by `RPM_PER_RPS`.
+- If the scripting language rejects a fractional exponent, compute
+  `theta ^ 1.5` as `exp(1.5 * ln(max(theta, epsilon)))` and guard `theta = 0`.
+- Flooring the pedal naturally cascades downshifts one gear per completed
+  shift, so there is no separate skip-a-gear kickdown. That aggressive behavior
+  is left for a future S mode if wanted.
+- At a standstill in gear 1 there is nothing to downshift; the car simply stays
+  in 1st until the upshift line is crossed.
+- Drive-mode engagement still starts in 1st with `antiStall` set, as it does
+  today; auto shifting resumes once anti-stall clears and the gearbox settles.
+
 ## Engine
 
 ### Databus Inputs (Out Variables)
