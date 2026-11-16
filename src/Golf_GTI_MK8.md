@@ -364,6 +364,13 @@ if autoAllowed && targetGear >= 1 && targetGear <= 6:
 - Steering_Wheel.right_pedal
   - Fractional
   - Throttle input, 0(no Throttle) -> 1(full Throttle)
+- Wheel_FL.rps / Wheel_FR.rps / Wheel_RL.rps / Wheel_RR.rps
+  - Fractional
+  - wheel speeds, used only by traction control
+  - FL/FR are driven, RL/RR are the un-driven ground-speed reference
+- Btn_TC.is_pressed
+  - Boolean
+  - traction control button, toggles TC on/off
 
 ### Databus Outputs (In Variables)
 
@@ -376,6 +383,9 @@ if autoAllowed && targetGear >= 1 && targetGear <= 6:
 - Dial_RPM.display_value
   - Fractional
   - -1 - 1, RPS 0 -> -1, RPS 150 -> 1
+- Btn_TC.is_illuminated
+  - Boolean
+  - on when TC is disabled or actively cutting, off otherwise
 
 ### Logic
 
@@ -401,14 +411,136 @@ MIN_IDLE_THROTTLE = 0.05
        - `minimalThrottle = (IDLE_RPS - Engine.rps) * 0.2`
        - clamp `minimalThrottle` to `[MIN_IDLE_THROTTLE, 1.0]`
        - this is 1.0 for all `Engine.rps <= 8.5`, so cranking naturally gets full throttle
-    2. apply pedal input (skipped while `antiStall` is active):
-       - `engineThrottle = minimalThrottle + (1.0 - minimalThrottle) * pedalInput`
-       - clamp `engineThrottle` to `[MIN_IDLE_THROTTLE, 1.0]`
+    2. apply pedal input (skipped while `antiStall` is active or while traction
+       control is cutting):
+        - `engineThrottle = minimalThrottle + (1.0 - minimalThrottle) * pedalInput`
+        - clamp `engineThrottle` to `[MIN_IDLE_THROTTLE, 1.0]`
+        - when traction control is cutting this tick the pedal term is omitted,
+          so `engineThrottle = minimalThrottle` (idle floor kept, see Traction
+          Control below)
     3. set `ASM_Throttle.input` -> `engineThrottle`
 - RPM dial: `Dial_RPM.display_value = dial_map(Engine.rps, 0, DIAL_RPM_MAX)`
 
 `dial_map(input, min, max)` maps `[min, max]` to `[-1, 1]` and clamps the result
 to `[-1, 1]`.
+
+### Traction Control
+
+FWD traction control, evaluated inside `engine_on_tick`. The rear wheels are
+un-driven, so rear speed is the ground-speed reference; the driven front wheels
+can spin faster than the car is actually moving. When they do, the driver's
+pedal contribution is removed from the throttle output.
+
+**Reference and detector**
+
+```txt
+rearAvg  = (abs(Wheel_RL.rps) + abs(Wheel_RR.rps)) * 0.5
+frontAvg = (abs(Wheel_FL.rps) + abs(Wheel_FR.rps)) * 0.5
+```
+
+- `abs` per wheel: wheel rps is signed in reverse, so a raw average would give a
+  negative baseline and never trigger.
+- No division by `rearAvg`: use a ratio plus an absolute offset. The rear
+  baseline is only trusted once `rearAvg > TRACTION_MIN_REF_RPS`.
+
+**Constants**
+
+```txt
+TRACTION_SLIP_RATIO     = 1.20   # front/rear speed ratio to start cutting
+TRACTION_SLIP_OFFSET    = 0.3    # rps, absolute slip margin
+TRACTION_MIN_PEDAL      = 0.1    # only active while throttle is applied
+TRACTION_MIN_REF_RPS    = 0.5    # rear must roll before it is trusted
+```
+
+**Global state**
+
+```txt
+tcEnabled       # latching, default true
+lastTCPressed   # TC button edge detector
+```
+
+**Button handling**
+
+Same latching pattern as the ABS button:
+
+- on the rising edge of `Btn_TC.is_pressed`, toggle `tcEnabled`
+- a held button does not repeat
+- default on; the state is not reset on power off
+- always update `lastTCPressed` each tick
+
+**Detector per tick**
+
+Stateless: recompute slip every tick, no latch.
+
+```txt
+slipThreshold = rearAvg * TRACTION_SLIP_RATIO + TRACTION_SLIP_OFFSET
+slip = (rearAvg > TRACTION_MIN_REF_RPS) && (frontAvg > slipThreshold)
+```
+
+Eligibility gate; the throttle is only cut while all of these hold:
+
+```txt
+powerState == 2
+targetGear != 0
+! antiStall
+tcEnabled
+Steering_Wheel.right_pedal > TRACTION_MIN_PEDAL
+all four wheel-rps databus variables available
+```
+
+**Throttle cut**
+
+When `slip` is true, skip the pedal-blend term in the Engine throttle logic and
+use the clamped idle/anti-stall throttle:
+
+```txt
+engineThrottle = minimalThrottle                              # traction cut
+engineThrottle = minimalThrottle
+               + (1.0 - minimalThrottle) * pedalInput         # normal
+```
+
+The result is clamped to `[MIN_IDLE_THROTTLE, 1.0]` as before. The idle floor is
+intentionally kept: writing `0` would fight the idle controller and stall the
+engine. Recovery is immediate on the next tick `frontAvg` is under the threshold.
+
+**Button light**
+
+```txt
+Btn_TC.is_illuminated = (! tcEnabled) || slip
+```
+
+- on when TC is disabled
+- on while TC is actively cutting this tick
+- off otherwise
+
+**Validation / caveats**
+
+- The rear-baseline idea is correct: on a FWD car the rear axle is the only
+  un-driven speed source, so it is the right reference.
+- TC does not operate from a standstill: while `rearAvg <= TRACTION_MIN_REF_RPS`
+  the rear baseline is not trusted, so launch wheelspin is left uncontrolled.
+- The rolling gate only covers a non-rolling/unloaded rear axle. If the rear
+  wheels are still rolling while the fronts are off the ground, the fronts can
+  still trigger a cut; a ground-contact or body-speed input is the exact fix.
+- Cornering changes path length. At full lock the front-axle average travels
+  about 16% farther than the rear-axle average, and the outer front travels
+  about 30% farther than the rear average. The ratio + offset tolerates this at
+  low speed; at speed the steering angle is smaller, so the ratio approaches 1.
+  Verify at full-lock low speed and raise `TRACTION_SLIP_RATIO` if it
+  false-triggers.
+- Averaging both front wheels partially masks a single spinning wheel on an open
+  differential; strong single-wheel spin still crosses the threshold. If it
+  under-detects, compare each front wheel (or `max` front), which also increases
+  cornering false positives.
+- Requiring all four wheel variables prevents a missing rear databus from
+  leaving `rearAvg == 0` and producing a false cut.
+- The `antiStall` gate avoids acting while the transmission holds the gearbox in
+  its fake neutral, where the front wheels are not being driven.
+- The detector is stateless, so a front speed hovering at the threshold can
+  chatter the throttle; add a latch or recover threshold only if that shows up
+  in testing.
+- Cutting torque can drop `Engine.rps` below `ANTI_STALL_RPS`; the existing
+  transmission anti-stall then takes over (fake neutral). This is acceptable.
 
 ## Steering
 
@@ -508,6 +640,8 @@ side. A right turn gives `Right = +inner`, `Left = -outer`; a left turn gives
 - `REAR_BRAKE_RATIO = 3.0 / 7.0`
   - rear pressure per unit of front pressure, from `front:rear = 7:3`
   - front is the reference (gets the full proxy pedal); rear is proportional
+- `MAX_BRAKE_PRESSURE = 0.5`
+  - final scale applied to every wheel's brake pressure output
 - `AUTOHOLD_STOP_RPS = 0.1`
   - `abs(wheel.rps)` below this counts as a stopped wheel
 - `AUTOHOLD_RELEASE_THROTTLE = 0.1`
@@ -661,12 +795,15 @@ reading positive in reverse.
 - Rear base: `brakePedal * REAR_BRAKE_RATIO`, or `1.0` when `handbrakeActive`
   (bypassing the ratio; front is unaffected)
 - ABS: each wheel output is multiplied by its `absFactorX`
-- so `FL = frontBase * absFactorFL`, `FR = frontBase * absFactorFR`,
-  `RL = rearBase * absFactorRL`, `RR = rearBase * absFactorRR`
-- no clamping is needed: the pedal is in `[0, 1]`, `REAR_BRAKE_RATIO < 1`, and
-  each ABS factor is in `[0, 1]`
+- final scale: every wheel output is multiplied by `MAX_BRAKE_PRESSURE`
+- so `FL = frontBase * absFactorFL * MAX_BRAKE_PRESSURE`,
+  `FR = frontBase * absFactorFR * MAX_BRAKE_PRESSURE`,
+  `RL = rearBase * absFactorRL * MAX_BRAKE_PRESSURE`,
+  `RR = rearBase * absFactorRR * MAX_BRAKE_PRESSURE`
+- no clamping is needed: the pedal is in `[0, 1]`, `REAR_BRAKE_RATIO < 1`,
+  `MAX_BRAKE_PRESSURE < 1`, and each ABS factor is in `[0, 1]`
 
-Base combinations (before ABS modulation):
+Base combinations (before ABS modulation and `MAX_BRAKE_PRESSURE`):
 
 - pedal only: front = pedal, rear = pedal * 3/7
 - handbrake only: front = 0, rear = 1.0

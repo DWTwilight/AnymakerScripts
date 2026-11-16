@@ -96,6 +96,10 @@
             "type": "bool",
             "description": "ABS button light"
         },
+        "Btn_TC.is_illuminated": {
+            "type": "bool",
+            "description": "Traction control button light; on when disabled or active"
+        },
         "ASM_Gearbox.input": {
             "type": "fractional",
             "description": "Gearbox shift pulse: above 0.75 shifts up, below -0.75 shifts down"
@@ -213,6 +217,10 @@
         "Btn_ABS.is_pressed": {
             "type": "bool",
             "description": "ABS button pressed"
+        },
+        "Btn_TC.is_pressed": {
+            "type": "bool",
+            "description": "Traction control button pressed"
         }
     }
 }

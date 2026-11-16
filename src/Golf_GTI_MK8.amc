@@ -14,7 +14,7 @@ var MIN_IDLE_THROTTLE = 0.05
 
 # max idle throttle
 define var fractional MAX_IDLE_THROTTLE
-var MAX_IDLE_THROTTLE = 0.3
+var MAX_IDLE_THROTTLE = 0.2
 
 # wheel base (m)
 define var fractional WHEEL_BASE
@@ -56,6 +56,22 @@ var ANTI_STALL_RECOVER_BRAKE = 0.01
 define var fractional LAUNCH_THROTTLE
 var LAUNCH_THROTTLE = 0.95
 
+# traction slip ratio
+define var fractional TRACTION_SLIP_RATIO
+var TRACTION_SLIP_RATIO = 1.2
+
+# traction slip offset (rps)
+define var fractional TRACTION_SLIP_OFFSET
+var TRACTION_SLIP_OFFSET = 0.3
+
+# traction min pedal
+define var fractional TRACTION_MIN_PEDAL
+var TRACTION_MIN_PEDAL = 0.1
+
+# traction min rear ref (rps)
+define var fractional TRACTION_MIN_REF_RPS
+var TRACTION_MIN_REF_RPS = 0.5
+
 # rear/front brake ratio (3/7)
 define var fractional REAR_BRAKE_RATIO
 var REAR_BRAKE_RATIO = 3.0 / 7.0
@@ -70,7 +86,7 @@ var AUTOHOLD_RELEASE_THROTTLE = 0.1
 
 # abs min brake pedal
 define var fractional ABS_MIN_BRAKE
-var ABS_MIN_BRAKE = 0.2
+var ABS_MIN_BRAKE = 0.1
 
 # abs target speed ratio
 define var fractional ABS_TARGET_SPEED_RATIO
@@ -200,6 +216,14 @@ var absEnabled = true
 # abs btn last state
 define var bool lastABSPressed
 var lastABSPressed = false
+
+# tc enabled (default on)
+define var bool tcEnabled
+var tcEnabled = true
+
+# tc btn last state
+define var bool lastTCPressed
+var lastTCPressed = false
 
 # bool -> 1.0 / 0.0
 define function bool_to_fraction (bool value, fractional result)
@@ -358,8 +382,20 @@ define function engine_on_tick ()
 {
 	define var fractional starterValue
 	define var fractional throttleValue
+	define var bool tcActive
 	var starterValue = 0.0
 	var throttleValue = 0.0
+	var tcActive = false
+
+	# tc button (latching)
+	requires (out Btn_TC.is_pressed)
+	{
+		if (out Btn_TC.is_pressed && ! (var lastTCPressed))
+		{
+			var tcEnabled = ! (var tcEnabled)
+		}
+		var lastTCPressed = out Btn_TC.is_pressed
+	}
 
 	requires (out Engine.rps)
 	{
@@ -367,6 +403,33 @@ define function engine_on_tick ()
 		{
 			requires (out Steering_Wheel.right_pedal)
 			{
+				# traction control (stateless)
+				requires (out Wheel_FL.rps)
+				{
+					requires (out Wheel_FR.rps)
+					{
+						requires (out Wheel_RL.rps)
+						{
+							requires (out Wheel_RR.rps)
+							{
+								if (! (var targetGear == 0) && ! (var antiStall) && (var tcEnabled) && (var brakePedal < var TRACTION_MIN_PEDAL) && (out Steering_Wheel.right_pedal > var TRACTION_MIN_PEDAL))
+								{
+									define var fractional frontAvg
+									define var fractional rearAvg
+									define var fractional slipThreshold
+									var frontAvg = (abs (out Wheel_FL.rps) + abs (out Wheel_FR.rps)) * 0.5
+									var rearAvg = (abs (out Wheel_RL.rps) + abs (out Wheel_RR.rps)) * 0.5
+									var slipThreshold = var rearAvg * var TRACTION_SLIP_RATIO + var TRACTION_SLIP_OFFSET
+									if ((var rearAvg > var TRACTION_MIN_REF_RPS) && (var frontAvg > var slipThreshold))
+									{
+										var tcActive = true
+									}
+								}
+							}
+						}
+					}
+				}
+
 				define var fractional rawMinimal
 				define var fractional rawThrottle
 
@@ -378,9 +441,12 @@ define function engine_on_tick ()
 					var rawMinimal = var MIN_IDLE_THROTTLE
 				}
 				call clamp (var rawMinimal, var MIN_IDLE_THROTTLE, var MAX_IDLE_THROTTLE, var rawThrottle)
-				requires (out Gearbox.clutch_factor)
+				if (! (var tcActive))
 				{
-					var rawThrottle = var rawThrottle + (1.0 - var rawThrottle) * out Steering_Wheel.right_pedal * (0.2 + 0.8 * out Gearbox.clutch_factor)
+					requires (out Gearbox.clutch_factor)
+					{
+						var rawThrottle = var rawThrottle + (1.0 - var rawThrottle) * out Steering_Wheel.right_pedal * (0.2 + 0.8 * out Gearbox.clutch_factor)
+					}
 				}
 				call clamp (var rawThrottle, var MIN_IDLE_THROTTLE, 1.0, var throttleValue)
 			}
@@ -401,6 +467,12 @@ define function engine_on_tick ()
 	requires (in ASM_Throttle.input)
 	{
 		in ASM_Throttle.input = var throttleValue
+	}
+
+	# tc button light
+	requires (in Btn_TC.is_illuminated)
+	{
+		in Btn_TC.is_illuminated = (! (var tcEnabled)) || (var tcActive)
 	}
 }
 
