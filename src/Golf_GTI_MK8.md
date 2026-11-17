@@ -293,7 +293,7 @@ Downshift trigger table (RPM, in the **current** gear):
 
 |      theta      | 6->5  | 5->4  | 4->3  | 3->2  | 2->1  |
 | :-------------: | :---: | :---: | :---: | :---: | :---: |
-| **0%** (coast)  | 1404  | 1296  | 1188  | 1080  | 972   |
+| **0%** (coast)  | 1404  | 1296  | 1188  | 1080  |  972  |
 |     **10%**     | 1495  | 1380  | 1264  | 1148  | 1032  |
 |     **25%**     | 1726  | 1591  | 1455  | 1320  | 1184  |
 |     **50%**     | 2286  | 2102  | 1918  | 1734  | 1550  |
@@ -361,6 +361,27 @@ if autoAllowed && targetGear >= 1 && targetGear <= 6:
 - Engine.rps
   - Fractional
   - the engine starts at 6 rps (360 RPM)
+- Engine.lubricant_volume
+  - Fractional
+  - current oil level
+- Engine.lubricant_capacity
+  - Fractional
+  - total oil capacity
+- Engine.coolant_volume
+  - Fractional
+  - current coolant level
+- Engine.coolant_capacity
+  - Fractional
+  - total coolant capacity
+- Engine.temperature
+  - Fractional
+  - engine temperature, max
+- Fuel_Tank.liquid_capacity
+  - Fractional
+  - total fuel capacity
+- Fuel_Tank.total_liquid_volume
+  - Fractional
+  - current fuel level
 - Steering_Wheel.right_pedal
   - Fractional
   - Throttle input, 0(no Throttle) -> 1(full Throttle)
@@ -386,6 +407,30 @@ if autoAllowed && targetGear >= 1 && targetGear <= 6:
 - Btn_TC.is_illuminated
   - Boolean
   - on when TC is disabled or actively cutting, off otherwise
+- Dial_Coolant.display_value
+  - Fractional
+  - coolant percentage, 0-1, map to -1 - 1
+- Dial_Coolant.is_illuminated
+  - Boolean
+  - on when powerState > 0, or blinks when warning(less than 0.25)
+- Dial_Oil.display_value
+  - Fractional
+  - oil percentage, 0-1, map to -1 - 1
+- Dial_Oil.is_illuminated
+  - Boolean
+  - on when powerState > 0, or blinks when warning(less than 0.25)
+- Dial_Temp.display_value
+  - Fractional
+  - engine temp, 60-120,map to -1 - 1
+- Dial_Temp.is_illuminated
+  - Boolean
+  - on when powerState > 0, or blinks when warning(>100)
+- Dial_Fuel.display_value
+  - Fractional
+  - oil percentage, 0-1, map to -1 - 1
+- Dial_Fuel.is_illuminated
+  - Boolean
+  - on when powerState > 0, or blinks when warning(less than 0.1)
 
 ### Logic
 

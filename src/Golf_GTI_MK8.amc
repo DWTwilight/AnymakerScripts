@@ -104,6 +104,34 @@ var DIAL_RPM_MAX = 150.0
 define var fractional DIAL_SPEED_MAX
 var DIAL_SPEED_MAX = 240.0
 
+# coolant warning level
+define var fractional DIAL_COOLANT_WARN
+var DIAL_COOLANT_WARN = 0.25
+
+# oil warning level
+define var fractional DIAL_OIL_WARN
+var DIAL_OIL_WARN = 0.25
+
+# fuel warning level
+define var fractional DIAL_FUEL_WARN
+var DIAL_FUEL_WARN = 0.1
+
+# temp dial min (deg c)
+define var fractional DIAL_TEMP_MIN
+var DIAL_TEMP_MIN = 60.0
+
+# temp dial max (deg c)
+define var fractional DIAL_TEMP_MAX
+var DIAL_TEMP_MAX = 120.0
+
+# temp warning (deg c)
+define var fractional DIAL_TEMP_WARN
+var DIAL_TEMP_WARN = 100.0
+
+# blink half period (ticks)
+define var integer DIAL_BLINK_TICKS
+var DIAL_BLINK_TICKS = 30
+
 # rpm per rps
 define var fractional RPM_PER_RPS
 var RPM_PER_RPS = 60.0
@@ -225,6 +253,10 @@ var tcEnabled = true
 define var bool lastTCPressed
 var lastTCPressed = false
 
+# tick counter
+define var integer tickCount
+var tickCount = 0
+
 # bool -> 1.0 / 0.0
 define function bool_to_fraction (bool value, fractional result)
 {
@@ -253,6 +285,22 @@ define function clamp (fractional inputValue, fractional minValue, fractional ma
 	{
 		param clampedResult = param inputValue
 	}
+}
+
+# volume / capacity, clamped
+define function fill_ratio (fractional volume, fractional capacity, fractional ratioResult)
+{
+	param ratioResult = 0.0
+	if (param capacity > 0.0)
+	{
+		call clamp (param volume / param capacity, 0.0, 1.0, param ratioResult)
+	}
+}
+
+# power/warning light rule
+define function warning_light (bool powerOn, bool warning, bool blinkState, bool lightResult)
+{
+	param lightResult = param powerOn && ! (param warning && ! (param blinkState))
 }
 
 # map range to +-limit
@@ -1043,12 +1091,119 @@ define function door_lock_on_tick ()
 	}
 }
 
+# coolant/oil/temp/fuel
+define function dials_on_tick ()
+{
+	define var bool blinkOn
+	var blinkOn = (var tickCount % (var DIAL_BLINK_TICKS * 2)) < var DIAL_BLINK_TICKS
+
+	# coolant dial
+	define var bool coolantWarn
+	var coolantWarn = true
+	define var fractional coolantRatio
+	requires (out Engine.coolant_volume)
+	{
+		requires (out Engine.coolant_capacity)
+		{
+			call fill_ratio (out Engine.coolant_volume, out Engine.coolant_capacity, var coolantRatio)
+			var coolantWarn = var coolantRatio < var DIAL_COOLANT_WARN
+		}
+	}
+	define var fractional coolantDial
+	define var bool coolantLight
+	call dial_map (var coolantRatio, 0.0, 1.0, 0.95, var coolantDial)
+	call warning_light (var powerState > 0, var coolantWarn, var blinkOn, var coolantLight)
+	requires (in Dial_Coolant.display_value)
+	{
+		in Dial_Coolant.display_value = var coolantDial
+	}
+	requires (in Dial_Coolant.is_illuminated)
+	{
+		in Dial_Coolant.is_illuminated = var coolantLight
+	}
+
+	# oil dial
+	define var fractional oilRatio
+	define var bool oilWarn
+	var oilWarn = true
+	requires (out Engine.lubricant_volume)
+	{
+		requires (out Engine.lubricant_capacity)
+		{
+			call fill_ratio (out Engine.lubricant_volume, out Engine.lubricant_capacity, var oilRatio)
+			var oilWarn = var oilRatio < var DIAL_OIL_WARN
+		}
+	}
+	define var fractional oilDial
+	define var bool oilLight
+	call dial_map (var oilRatio, 0.0, 1.0, 0.95, var oilDial)
+	call warning_light (var powerState > 0, var oilWarn, var blinkOn, var oilLight)
+	requires (in Dial_Oil.display_value)
+	{
+		in Dial_Oil.display_value = var oilDial
+	}
+	requires (in Dial_Oil.is_illuminated)
+	{
+		in Dial_Oil.is_illuminated = var oilLight
+	}
+
+	# temp dial
+	define var fractional tempValue
+	define var bool tempWarn
+	var tempValue = var DIAL_TEMP_MIN
+	var tempWarn = true
+	requires (out Engine.temperature)
+	{
+		var tempValue = out Engine.temperature
+		var tempWarn = out Engine.temperature > var DIAL_TEMP_WARN
+	}
+	define var fractional tempDial
+	define var bool tempLight
+	call dial_map (var tempValue, var DIAL_TEMP_MIN, var DIAL_TEMP_MAX, 0.95, var tempDial)
+	call warning_light (var powerState > 0, var tempWarn, var blinkOn, var tempLight)
+	requires (in Dial_Temp.display_value)
+	{
+		in Dial_Temp.display_value = var tempDial
+	}
+	requires (in Dial_Temp.is_illuminated)
+	{
+		in Dial_Temp.is_illuminated = var tempLight
+	}
+
+	# fuel dial
+	define var fractional fuelRatio
+	define var bool fuelWarn
+	var fuelWarn = true
+	requires (out Fuel_Tank.total_liquid_volume)
+	{
+		requires (out Fuel_Tank.liquid_capacity)
+		{
+			call fill_ratio (out Fuel_Tank.total_liquid_volume, out Fuel_Tank.liquid_capacity, var fuelRatio)
+			var fuelWarn = var fuelRatio < var DIAL_FUEL_WARN
+		}
+	}
+	define var fractional fuelDial
+	define var bool fuelLight
+	call dial_map (var fuelRatio, 0.0, 1.0, 0.95, var fuelDial)
+	call warning_light (var powerState > 0, var fuelWarn, var blinkOn, var fuelLight)
+	requires (in Dial_Fuel.display_value)
+	{
+		in Dial_Fuel.display_value = var fuelDial
+	}
+	requires (in Dial_Fuel.is_illuminated)
+	{
+		in Dial_Fuel.is_illuminated = var fuelLight
+	}
+}
+
 on_tick
 {
+	var tickCount = (var tickCount + 1) % (var DIAL_BLINK_TICKS * 2)
 	call power_on_tick ()
 	call brake_on_tick ()
 	call transmission_on_tick ()
 	call engine_on_tick ()
 	call steering_on_tick ()
 	call door_lock_on_tick ()
+	call dials_on_tick ()
 }

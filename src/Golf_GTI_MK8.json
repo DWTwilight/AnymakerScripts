@@ -36,6 +36,22 @@
             "type": "bool",
             "description": "Backlight on/off"
         },
+        "Dial_Coolant.is_illuminated": {
+            "type": "bool",
+            "description": "Backlight on/off, blinks when coolant is low"
+        },
+        "Dial_Oil.is_illuminated": {
+            "type": "bool",
+            "description": "Backlight on/off, blinks when oil is low"
+        },
+        "Dial_Temp.is_illuminated": {
+            "type": "bool",
+            "description": "Backlight on/off, blinks when engine temp is high"
+        },
+        "Dial_Fuel.is_illuminated": {
+            "type": "bool",
+            "description": "Backlight on/off, blinks when fuel is low"
+        },
         "Display_Gear.is_illuminated": {
             "type": "bool",
             "description": "Backlight on/off"
@@ -47,6 +63,22 @@
         "Dial_Speed.display_value": {
             "type": "fractional",
             "description": "Speed dial needle, -1 (0 km/h) to 1 (240 km/h)"
+        },
+        "Dial_Coolant.display_value": {
+            "type": "fractional",
+            "description": "Coolant level, -1 (empty) to 1 (full)"
+        },
+        "Dial_Oil.display_value": {
+            "type": "fractional",
+            "description": "Oil level, -1 (empty) to 1 (full)"
+        },
+        "Dial_Temp.display_value": {
+            "type": "fractional",
+            "description": "Engine temperature, -1 (60 C) to 1 (120 C)"
+        },
+        "Dial_Fuel.display_value": {
+            "type": "fractional",
+            "description": "Fuel level, -1 (empty) to 1 (full)"
         },
         "Display_Gear.display_value": {
             "type": "fractional",
@@ -161,6 +193,34 @@
         "Engine.rps": {
             "type": "fractional",
             "description": "The engine starts at 6 rps (360 RPM)"
+        },
+        "Engine.lubricant_volume": {
+            "type": "fractional",
+            "description": "Current oil level"
+        },
+        "Engine.lubricant_capacity": {
+            "type": "fractional",
+            "description": "Total oil capacity"
+        },
+        "Engine.coolant_volume": {
+            "type": "fractional",
+            "description": "Current coolant level"
+        },
+        "Engine.coolant_capacity": {
+            "type": "fractional",
+            "description": "Total coolant capacity"
+        },
+        "Engine.temperature": {
+            "type": "fractional",
+            "description": "Engine temperature in degrees C"
+        },
+        "Fuel_Tank.total_liquid_volume": {
+            "type": "fractional",
+            "description": "Current fuel level"
+        },
+        "Fuel_Tank.liquid_capacity": {
+            "type": "fractional",
+            "description": "Total fuel capacity"
         },
         "Steering_Wheel.right_pedal": {
             "type": "fractional",
