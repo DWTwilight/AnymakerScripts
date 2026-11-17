@@ -257,6 +257,10 @@ var lastTCPressed = false
 define var integer tickCount
 var tickCount = 0
 
+# shared speed (km/h)
+define var fractional speedKmh
+var speedKmh = 0.0
+
 # bool -> 1.0 / 0.0
 define function bool_to_fraction (bool value, fractional result)
 {
@@ -411,18 +415,6 @@ define function power_on_tick ()
 	{
 		in Btn_Start_Stop.is_illuminated = var mainOn
 	}
-	requires (in Dial_RPM.is_illuminated)
-	{
-		in Dial_RPM.is_illuminated = var mainOn
-	}
-	requires (in Dial_Speed.is_illuminated)
-	{
-		in Dial_Speed.is_illuminated = var mainOn
-	}
-	requires (in Display_Gear.is_illuminated)
-	{
-		in Display_Gear.is_illuminated = var mainOn
-	}
 }
 
 # engine logic
@@ -498,13 +490,6 @@ define function engine_on_tick ()
 				}
 				call clamp (var rawThrottle, var MIN_IDLE_THROTTLE, 1.0, var throttleValue)
 			}
-		}
-		# rpm dial
-		define var fractional rpmDial
-		call dial_map (out Engine.rps, 0.0, var DIAL_RPM_MAX, 0.95, var rpmDial)
-		requires (in Dial_RPM.display_value)
-		{
-			in Dial_RPM.display_value = var rpmDial
 		}
 	}
 
@@ -771,6 +756,10 @@ define function transmission_on_tick ()
 	{
 		in Display_Gear.display_value = var gearDisplay
 	}
+	requires (in Display_Gear.is_illuminated)
+	{
+		in Display_Gear.is_illuminated = var powerState > 0
+	}
 }
 
 # brake logic
@@ -928,15 +917,8 @@ define function brake_on_tick ()
 		}
 	}
 
-	# speed dial
-	define var fractional speedKmh
+	# speed
 	var speedKmh = (var wheelFlSpeed + var wheelFrSpeed + var wheelRlSpeed + var wheelRrSpeed) * 0.25 * 2.0 * var PI * var WHEEL_RADIUS * 3.6
-	define var fractional speedDial
-	call dial_map (var speedKmh, 0.0, var DIAL_SPEED_MAX, 0.95, var speedDial)
-	requires (in Dial_Speed.display_value)
-	{
-		in Dial_Speed.display_value = var speedDial
-	}
 
 	# brake pressures
 	define var fractional rearPressure
@@ -1096,6 +1078,33 @@ define function dials_on_tick ()
 {
 	define var bool blinkOn
 	var blinkOn = (var tickCount % (var DIAL_BLINK_TICKS * 2)) < var DIAL_BLINK_TICKS
+
+	# rpm dial
+	requires (out Engine.rps)
+	{
+		define var fractional rpmDial
+		call dial_map (out Engine.rps, 0.0, var DIAL_RPM_MAX, 0.95, var rpmDial)
+		requires (in Dial_RPM.display_value)
+		{
+			in Dial_RPM.display_value = var rpmDial
+		}
+	}
+	requires (in Dial_RPM.is_illuminated)
+	{
+		in Dial_RPM.is_illuminated = var powerState > 0
+	}
+
+	# speed dial
+	define var fractional speedDial
+	call dial_map (var speedKmh, 0.0, var DIAL_SPEED_MAX, 0.95, var speedDial)
+	requires (in Dial_Speed.display_value)
+	{
+		in Dial_Speed.display_value = var speedDial
+	}
+	requires (in Dial_Speed.is_illuminated)
+	{
+		in Dial_Speed.is_illuminated = var powerState > 0
+	}
 
 	# coolant dial
 	define var bool coolantWarn
