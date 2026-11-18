@@ -440,6 +440,7 @@ Global state:
 powerState         # declared at top of script, owned by Power & Lights
 
 IDLE_RPS = 13.5
+SECONDARY_IDLE_RPS = 16.0
 STARTER_CUTOFF_RPS = 6.5
 MIN_IDLE_THROTTLE = 0.05
 ```
@@ -453,7 +454,8 @@ MIN_IDLE_THROTTLE = 0.05
     - no latch needed: once RPS reaches 6.5 the starter cuts, and the throttle below stays at 1.0 until RPS > 8.5, so the engine keeps accelerating instead of chattering
   - Throttle Logic (always evaluated while `powerState` is 2):
     1. calculate minimal throttle to keep idle (anti-stall), constant global `IDLE_RPS` (13.5)
-       - `minimalThrottle = (IDLE_RPS - Engine.rps) * 0.2`
+       - when `targetGear != 0` (not neutral), use `SECONDARY_IDLE_RPS` (16.0) instead
+       - `minimalThrottle = (idleTargetRps - Engine.rps) * 0.2`
        - clamp `minimalThrottle` to `[MIN_IDLE_THROTTLE, 1.0]`
        - this is 1.0 for all `Engine.rps <= 8.5`, so cranking naturally gets full throttle
     2. apply pedal input (skipped while `antiStall` is active or while traction

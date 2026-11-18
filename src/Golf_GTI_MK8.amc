@@ -1,8 +1,12 @@
 # Constants
 
 # idle engine speed (rps)
-define var fractional IDLE_RPS
-var IDLE_RPS = 13.5
+define var fractional NEUTRAL_IDLE_RPS
+var NEUTRAL_IDLE_RPS = 13.5
+
+# in-gear idle speed (rps)
+define var fractional DRIVE_IDLE_RPS
+var DRIVE_IDLE_RPS = 15.5
 
 # starter cutoff speed (rps)
 define var fractional STARTER_CUTOFF_RPS
@@ -14,7 +18,7 @@ var MIN_IDLE_THROTTLE = 0.05
 
 # max idle throttle
 define var fractional MAX_IDLE_THROTTLE
-var MAX_IDLE_THROTTLE = 0.2
+var MAX_IDLE_THROTTLE = 0.25
 
 # wheel base (m)
 define var fractional WHEEL_BASE
@@ -46,7 +50,7 @@ var MAX_INNER_STEER_ANGLE = atan (var WHEEL_BASE / (var WHEEL_BASE / tan (var MA
 
 # anti-stall engine rps
 define var fractional ANTI_STALL_RPS
-var ANTI_STALL_RPS = 9.0
+var ANTI_STALL_RPS = 10.0
 
 # anti-stall brake release
 define var fractional ANTI_STALL_RECOVER_BRAKE
@@ -472,10 +476,16 @@ define function engine_on_tick ()
 
 				define var fractional rawMinimal
 				define var fractional rawThrottle
+				define var fractional idleTargetRps
 
 				call bool_to_fraction (out Engine.rps < var STARTER_CUTOFF_RPS, var starterValue)
 
-				var rawMinimal = (var IDLE_RPS - out Engine.rps) * 0.2
+				var idleTargetRps = var NEUTRAL_IDLE_RPS
+				if (! (var targetGear == 0))
+				{
+					var idleTargetRps = var DRIVE_IDLE_RPS
+				}
+				var rawMinimal = (var idleTargetRps - out Engine.rps) * 0.2
 				if (! (var targetGear == 0) && (var brakePedal > var ANTI_STALL_RECOVER_BRAKE) && ! (var antiStall))
 				{
 					var rawMinimal = var MIN_IDLE_THROTTLE
