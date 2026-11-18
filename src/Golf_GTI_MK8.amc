@@ -20,6 +20,14 @@ var MIN_IDLE_THROTTLE = 0.05
 define var fractional MAX_IDLE_THROTTLE
 var MAX_IDLE_THROTTLE = 0.25
 
+# light switch low beam
+define var integer LIGHT_MODE_LOW
+var LIGHT_MODE_LOW = 1
+
+# light switch high beam
+define var integer LIGHT_MODE_HIGH
+var LIGHT_MODE_HIGH = 2
+
 # wheel base (m)
 define var fractional WHEEL_BASE
 var WHEEL_BASE = 2.72
@@ -257,6 +265,14 @@ var tcEnabled = true
 define var bool lastTCPressed
 var lastTCPressed = false
 
+# hazard light latched state
+define var bool hazardEnabled
+var hazardEnabled = false
+
+# hazard btn last state
+define var bool lastHazardPressed
+var lastHazardPressed = false
+
 # tick counter
 define var integer tickCount
 var tickCount = 0
@@ -418,6 +434,128 @@ define function power_on_tick ()
 	requires (in Btn_Start_Stop.is_illuminated)
 	{
 		in Btn_Start_Stop.is_illuminated = var mainOn
+	}
+}
+
+# headlight logic
+define function lights_on_tick ()
+{
+	# hazard button (latching)
+	requires (out Btn_Hazard_Light.is_pressed)
+	{
+		if (out Btn_Hazard_Light.is_pressed && ! (var lastHazardPressed))
+		{
+			var hazardEnabled = ! (var hazardEnabled)
+		}
+		var lastHazardPressed = out Btn_Hazard_Light.is_pressed
+	}
+
+	define var bool lowBeam
+	define var bool highBeam
+	define var bool rearLightOn
+	define var bool brakeLightOn
+	define var bool hazardBlink
+	define var fractional lowValue
+	define var fractional highValue
+	var lowBeam = false
+	var highBeam = false
+	var brakeLightOn = var brakePedal > 0.01
+	var rearLightOn = var brakeLightOn
+	var hazardBlink = var hazardEnabled && ((var tickCount % (var DIAL_BLINK_TICKS * 2)) < var DIAL_BLINK_TICKS)
+
+	requires (out Light_Switch.value)
+	{
+		var lowBeam = out Light_Switch.value == var LIGHT_MODE_LOW
+		var highBeam = out Light_Switch.value == var LIGHT_MODE_HIGH
+		var lowBeam = var lowBeam || var highBeam
+		var rearLightOn = var rearLightOn || var lowBeam
+	}
+
+	call bool_to_fraction (var lowBeam, var lowValue)
+	call bool_to_fraction (var highBeam, var highValue)
+	requires (in ASM_Low_Beam.input)
+	{
+		in ASM_Low_Beam.input = var lowValue
+	}
+	requires (in ASM_High_Beam.input)
+	{
+		in ASM_High_Beam.input = var highValue
+	}
+	requires (in Btn_Hazard_Light.is_illuminated)
+	{
+		in Btn_Hazard_Light.is_illuminated = var hazardBlink || (! (var hazardEnabled) && (var powerState > 0))
+	}
+
+	# turn lights (hazard)
+	requires (in Light_Turn_L1.is_illuminated)
+	{
+		in Light_Turn_L1.is_illuminated = var hazardBlink
+	}
+	requires (in Light_Turn_L2.is_illuminated)
+	{
+		in Light_Turn_L2.is_illuminated = var hazardBlink
+	}
+	requires (in Light_Turn_L3.is_illuminated)
+	{
+		in Light_Turn_L3.is_illuminated = var hazardBlink
+	}
+	requires (in Light_Turn_R1.is_illuminated)
+	{
+		in Light_Turn_R1.is_illuminated = var hazardBlink
+	}
+	requires (in Light_Turn_R2.is_illuminated)
+	{
+		in Light_Turn_R2.is_illuminated = var hazardBlink
+	}
+	requires (in Light_Turn_R3.is_illuminated)
+	{
+		in Light_Turn_R3.is_illuminated = var hazardBlink
+	}
+
+	# rear lights
+	requires (in Light_Rear_1.is_illuminated)
+	{
+		in Light_Rear_1.is_illuminated = var rearLightOn
+	}
+	requires (in Light_Rear_2.is_illuminated)
+	{
+		in Light_Rear_2.is_illuminated = var rearLightOn
+	}
+	requires (in Light_Rear_3.is_illuminated)
+	{
+		in Light_Rear_3.is_illuminated = var rearLightOn
+	}
+	requires (in Light_Rear_4.is_illuminated)
+	{
+		in Light_Rear_4.is_illuminated = var rearLightOn
+	}
+	requires (in Light_Rear_5.is_illuminated)
+	{
+		in Light_Rear_5.is_illuminated = var rearLightOn
+	}
+	requires (in Light_Rear_6.is_illuminated)
+	{
+		in Light_Rear_6.is_illuminated = var rearLightOn
+	}
+
+	# brake lights
+	requires (in Light_Brake_1.is_illuminated)
+	{
+		in Light_Brake_1.is_illuminated = var brakeLightOn
+	}
+	requires (in Light_Brake_2.is_illuminated)
+	{
+		in Light_Brake_2.is_illuminated = var brakeLightOn
+	}
+	requires (in Light_Brake_3.is_illuminated)
+	{
+		in Light_Brake_3.is_illuminated = var brakeLightOn
+	}
+
+	# reverse light
+	requires (in Light_Reverse.is_illuminated)
+	{
+		in Light_Reverse.is_illuminated = var targetGear == -1
 	}
 }
 
@@ -1220,6 +1358,7 @@ on_tick
 	var tickCount = (var tickCount + 1) % (var DIAL_BLINK_TICKS * 2)
 	call power_on_tick ()
 	call brake_on_tick ()
+	call lights_on_tick ()
 	call transmission_on_tick ()
 	call engine_on_tick ()
 	call steering_on_tick ()

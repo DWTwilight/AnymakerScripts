@@ -28,6 +28,10 @@
             "type": "bool",
             "description": "Backlight on/off"
         },
+        "Btn_Hazard_Light.is_illuminated": {
+            "type": "bool",
+            "description": "Steady on when powered, blinks in hazard mode"
+        },
         "Dial_RPM.is_illuminated": {
             "type": "bool",
             "description": "Backlight on/off"
@@ -91,6 +95,78 @@
         "ASM_Power_Engine.input": {
             "type": "fractional",
             "description": "Engine Power Relay (1 -> on)"
+        },
+        "ASM_Low_Beam.input": {
+            "type": "fractional",
+            "description": "Low Beam Power Relay (1 -> on)"
+        },
+        "ASM_High_Beam.input": {
+            "type": "fractional",
+            "description": "High Beam Power Relay (1 -> on)"
+        },
+        "Light_Turn_L1.is_illuminated": {
+            "type": "bool",
+            "description": "Left turn light 1, on in hazard mode"
+        },
+        "Light_Turn_L2.is_illuminated": {
+            "type": "bool",
+            "description": "Left turn light 2, on in hazard mode"
+        },
+        "Light_Turn_L3.is_illuminated": {
+            "type": "bool",
+            "description": "Left turn light 3, on in hazard mode"
+        },
+        "Light_Turn_R1.is_illuminated": {
+            "type": "bool",
+            "description": "Right turn light 1, on in hazard mode"
+        },
+        "Light_Turn_R2.is_illuminated": {
+            "type": "bool",
+            "description": "Right turn light 2, on in hazard mode"
+        },
+        "Light_Turn_R3.is_illuminated": {
+            "type": "bool",
+            "description": "Right turn light 3, on in hazard mode"
+        },
+        "Light_Rear_1.is_illuminated": {
+            "type": "bool",
+            "description": "Rear light 1, on when braking or lights on"
+        },
+        "Light_Rear_2.is_illuminated": {
+            "type": "bool",
+            "description": "Rear light 2, on when braking or lights on"
+        },
+        "Light_Rear_3.is_illuminated": {
+            "type": "bool",
+            "description": "Rear light 3, on when braking or lights on"
+        },
+        "Light_Rear_4.is_illuminated": {
+            "type": "bool",
+            "description": "Rear light 4, on when braking or lights on"
+        },
+        "Light_Rear_5.is_illuminated": {
+            "type": "bool",
+            "description": "Rear light 5, on when braking or lights on"
+        },
+        "Light_Rear_6.is_illuminated": {
+            "type": "bool",
+            "description": "Rear light 6, on when braking or lights on"
+        },
+        "Light_Brake_1.is_illuminated": {
+            "type": "bool",
+            "description": "Brake light 1, on when braking"
+        },
+        "Light_Brake_2.is_illuminated": {
+            "type": "bool",
+            "description": "Brake light 2, on when braking"
+        },
+        "Light_Brake_3.is_illuminated": {
+            "type": "bool",
+            "description": "Brake light 3, on when braking"
+        },
+        "Light_Reverse.is_illuminated": {
+            "type": "bool",
+            "description": "Reverse light, on when in reverse"
         },
         "ASM_Power_Starter.input": {
             "type": "fractional",
@@ -189,6 +265,14 @@
         "Steering_Wheel.left_pedal": {
             "type": "fractional",
             "description": "Brake input, 0 (no brake) -> 1 (full brake)"
+        },
+        "Light_Switch.value": {
+            "type": "integer",
+            "description": "Light mode: 0 off, 1 low beam, 2 high beam"
+        },
+        "Btn_Hazard_Light.is_pressed": {
+            "type": "bool",
+            "description": "Whether the hazard light button is pressed"
         },
         "Engine.rps": {
             "type": "fractional",

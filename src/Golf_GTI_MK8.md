@@ -72,6 +72,12 @@ Latch is open if handle is active and not locked
 - Steering_Wheel.left_pedal
   - Fractional
   - Break input, 0(no break) -> 1(full break)
+- Light_Switch.value
+  - Integer
+  - Light Mode, 0 -> off, 1 -> low beam, 2 -> high beam(low beam also on)
+- Btn_Hazard_Light.is_pressed
+  - Boolean
+  - whether hazard light is pressed
 
 ### Databus Outputs (In Variables)
 
@@ -93,6 +99,27 @@ Latch is open if handle is active and not locked
 - ASM_Power_Engine.input
   - Fractional
   - Engine Power Relay(1 -> on)
+- ASM_Low_Beam.input
+  - Fractional
+  - Low Beam Power Relay(1 -> on)
+- ASM_High_Beam.input
+  - Fractional
+  - High Beam Power Relay(1 -> on)
+- Btn_Hazard_Light.is_illuminated
+  - Boolean
+  - backlight on/off, on when either powerState > 0 or hazard blinking
+- Light_Turn_L{X}.is_illuminated
+  - Boolean
+  - Turning lights, on in hazard light mode (Light_Turn_L1-3, Light_Turn_R1-3)
+- Light_Rear_{X}.is_illuminated
+  - Boolean
+  - Rear lights, on when braking or light switch > 0, X -> 1-6
+- Light_Brake_{X}.is_illuminated
+  - Boolean
+  - Brake lights, on when braking, X -> 1-3
+- Light_Reverse.is_illuminated
+  - Boolean
+  - Reverse Light, on when in reverse
 
 ### Logic
 
@@ -115,6 +142,25 @@ powerState
     - If break input > 0.5, 1 -> 2
     - If no break (<= 0.5), 1 -> 0
   - if current state is 2, 2 -> 0
+
+#### Lights
+
+- Read `Light_Switch.value` (0 off, 1 low beam, 2 high beam)
+- low beam on when mode is low or high
+- high beam on only when mode is high
+- write `ASM_Low_Beam.input` / `ASM_High_Beam.input` as 1.0/0.0
+- hazard button (`Btn_Hazard_Light.is_pressed`) latches `hazardEnabled` on the
+  rising edge; while enabled all turn lights (`Light_Turn_L1-3`,
+  `Light_Turn_R1-3`) blink using the existing `tickCount` / `DIAL_BLINK_TICKS`
+  phase (on for the first half, off for the second half)
+- rear lights (`Light_Rear_1-6`) on when braking (`brakePedal > 0`) or
+  `Light_Switch.value > 0`
+- brake lights (`Light_Brake_1-3`) on when braking (`brakePedal > 0`)
+- reverse light (`Light_Reverse.is_illuminated`) on when `targetGear == -1`
+- hazard button backlight (`Btn_Hazard_Light.is_illuminated`) is steady on when
+  `powerState > 0`, and blinks with the hazard phase when hazard mode is on
+  (hazard takes precedence over the steady power-on light)
+- lights run after brake so they see the current tick's `brakePedal`
 
 ## Transmission
 
