@@ -457,6 +457,7 @@ define function lights_on_tick ()
 	define var bool hazardBlink
 	define var fractional lowValue
 	define var fractional highValue
+	define var fractional hazardValue
 	var lowBeam = false
 	var highBeam = false
 	var brakeLightOn = var brakePedal > 0.01
@@ -484,6 +485,11 @@ define function lights_on_tick ()
 	requires (in Btn_Hazard_Light.is_illuminated)
 	{
 		in Btn_Hazard_Light.is_illuminated = var hazardBlink || (! (var hazardEnabled) && (var powerState > 0))
+	}
+	call bool_to_fraction (var hazardBlink, var hazardValue)
+	requires (in ASM_Blinker.input)
+	{
+		in ASM_Blinker.input = var hazardValue
 	}
 
 	# turn lights (hazard)
@@ -556,6 +562,32 @@ define function lights_on_tick ()
 	requires (in Light_Reverse.is_illuminated)
 	{
 		in Light_Reverse.is_illuminated = var targetGear == -1
+	}
+
+	# interior front lights
+	requires (out Switch_Light_IntF.is_pressed)
+	{
+		requires (in Light_IntF_1.is_illuminated)
+		{
+			in Light_IntF_1.is_illuminated = out Switch_Light_IntF.is_pressed
+		}
+		requires (in Light_IntF_2.is_illuminated)
+		{
+			in Light_IntF_2.is_illuminated = out Switch_Light_IntF.is_pressed
+		}
+	}
+
+	# interior rear lights
+	requires (out Switch_Light_IntR.is_pressed)
+	{
+		requires (in Light_IntR_1.is_illuminated)
+		{
+			in Light_IntR_1.is_illuminated = out Switch_Light_IntR.is_pressed
+		}
+		requires (in Light_IntR_2.is_illuminated)
+		{
+			in Light_IntR_2.is_illuminated = out Switch_Light_IntR.is_pressed
+		}
 	}
 }
 

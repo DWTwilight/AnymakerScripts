@@ -78,6 +78,15 @@ Latch is open if handle is active and not locked
 - Btn_Hazard_Light.is_pressed
   - Boolean
   - whether hazard light is pressed
+- Switch_Light_IntF.is_pressed
+  - Boolean
+  - controls interior lights(front)
+- Switch_Light_IntR.is_pressed
+  - Boolean
+  - controls interior lights(rear)
+- ASM_Blinker.input
+  - Fractional
+  - Blinker Relay(1 -> on, but only to make sound for Hazard Light)
 
 ### Databus Outputs (In Variables)
 
@@ -120,6 +129,12 @@ Latch is open if handle is active and not locked
 - Light_Reverse.is_illuminated
   - Boolean
   - Reverse Light, on when in reverse
+- Light_IntF_{X}.is_illuminated
+  - Boolean
+  - Interior Light(front), on when switched on, X -> 1-2
+- Light_IntR_{X}.is_illuminated
+  - Boolean
+  - Interior Light(rear), on when switched on, X -> 1-2
 
 ### Logic
 
