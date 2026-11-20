@@ -944,3 +944,43 @@ Base combinations (before ABS modulation and `MAX_BRAKE_PRESSURE`):
 - bang-bang release has no hysteresis, so wheel pressure can chatter around the
   threshold; tune `ABS_TARGET_SPEED_RATIO` or add a recover threshold if needed
 
+## Radio
+
+### Databus Inputs (Out Variables)
+
+- Radio_Switch.value
+  - Integer
+  - Radio Switch, 0 -> off, 1-6 -> radio channel(0-5)
+- Btn_Mic.is_pressed
+  - Boolean
+  - When true, activate mic and transmitting
+- Microphone.signal
+  - Analogue
+  - microphone signal
+- Antenna.receive_signal
+  - Analogue
+  - Antenna received signal
+
+### Databus Outputs (In Variables)
+
+- Antenna.is_transmitting
+  - Boolean
+  - false -> receiving, true -> transmitting
+- Antenna.transmit_signal
+  - Analogue
+  - when transmitting, set this to be Microphone.signal
+- Microphone.is_recording
+  - Boolean
+  - true -> activate mic
+- Antenna.channel
+  - Integer
+  - radio channel, 0-5
+- Speaker_{X}.signal
+  - Analogue
+  - set to always be Antenna.receive_signal when radio is on(and power is on), X -> {"Dash", "FL", "FR", "RL", "RR"}
+- Btn_Mic.is_illuminated
+  - Boolean
+  - on when power is on and radio is on
+- ASM_Power_Radio.input
+  - Fractional
+  - Turn radio relay on when radio switch > 0

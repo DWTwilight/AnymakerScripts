@@ -1385,6 +1385,117 @@ define function dials_on_tick ()
 	}
 }
 
+# radio logic
+define function radio_on_tick ()
+{
+	define var bool radioEnabled
+	define var bool radioOn
+	define var bool transmitting
+	define var fractional radioRelayValue
+	var radioEnabled = false
+	var radioOn = false
+	var transmitting = false
+
+	requires (out Radio_Switch.value)
+	{
+		var radioEnabled = out Radio_Switch.value > 0
+	}
+	var radioOn = var radioEnabled && (var powerState > 0)
+
+	requires (out Btn_Mic.is_pressed)
+	{
+		var transmitting = var radioOn && out Btn_Mic.is_pressed
+	}
+
+	call bool_to_fraction (var radioEnabled, var radioRelayValue)
+	requires (in ASM_Power_Radio.input)
+	{
+		in ASM_Power_Radio.input = var radioRelayValue
+	}
+	requires (in Antenna.channel)
+	{
+		requires (out Radio_Switch.value)
+		{
+			in Antenna.channel = out Radio_Switch.value - 1
+		}
+	}
+	requires (in Antenna.is_transmitting)
+	{
+		in Antenna.is_transmitting = var transmitting
+	}
+	requires (in Microphone.is_recording)
+	{
+		in Microphone.is_recording = var transmitting
+	}
+	requires (in Btn_Mic.is_illuminated)
+	{
+		in Btn_Mic.is_illuminated = var radioOn
+	}
+
+	requires (in Antenna.transmit_signal)
+	{
+		if (var transmitting)
+		{
+			requires (out Microphone.signal)
+			{
+				in Antenna.transmit_signal = out Microphone.signal
+			}
+		}
+	}
+
+	# speakers
+	requires (in Speaker_Dash.signal)
+	{
+		if (var radioOn)
+		{
+			requires (out Antenna.receive_signal)
+			{
+				in Speaker_Dash.signal = out Antenna.receive_signal
+			}
+		}
+	}
+	requires (in Speaker_FL.signal)
+	{
+		if (var radioOn)
+		{
+			requires (out Antenna.receive_signal)
+			{
+				in Speaker_FL.signal = out Antenna.receive_signal
+			}
+		}
+	}
+	requires (in Speaker_FR.signal)
+	{
+		if (var radioOn)
+		{
+			requires (out Antenna.receive_signal)
+			{
+				in Speaker_FR.signal = out Antenna.receive_signal
+			}
+		}
+	}
+	requires (in Speaker_RL.signal)
+	{
+		if (var radioOn)
+		{
+			requires (out Antenna.receive_signal)
+			{
+				in Speaker_RL.signal = out Antenna.receive_signal
+			}
+		}
+	}
+	requires (in Speaker_RR.signal)
+	{
+		if (var radioOn)
+		{
+			requires (out Antenna.receive_signal)
+			{
+				in Speaker_RR.signal = out Antenna.receive_signal
+			}
+		}
+	}
+}
+
 on_tick
 {
 	var tickCount = (var tickCount + 1) % (var DIAL_BLINK_TICKS * 2)
@@ -1396,4 +1507,5 @@ on_tick
 	call steering_on_tick ()
 	call door_lock_on_tick ()
 	call dials_on_tick ()
+	call radio_on_tick ()
 }

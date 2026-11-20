@@ -247,6 +247,50 @@
         "ASM_Steering_Right.input": {
             "type": "fractional",
             "description": "Steering right input (-1 to 1), 1 is turning right"
+        },
+        "ASM_Power_Radio.input": {
+            "type": "fractional",
+            "description": "Radio power relay (1 -> on)"
+        },
+        "Antenna.is_transmitting": {
+            "type": "bool",
+            "description": "false receiving, true transmitting"
+        },
+        "Antenna.transmit_signal": {
+            "type": "analogue",
+            "description": "Transmit signal, set to the microphone signal while transmitting"
+        },
+        "Antenna.channel": {
+            "type": "integer",
+            "description": "Radio channel, 0-5"
+        },
+        "Microphone.is_recording": {
+            "type": "bool",
+            "description": "true activates the microphone"
+        },
+        "Btn_Mic.is_illuminated": {
+            "type": "bool",
+            "description": "Microphone button light, on when power and radio are on"
+        },
+        "Speaker_Dash.signal": {
+            "type": "analogue",
+            "description": "Dash speaker signal, set to the antenna receive signal while radio is on"
+        },
+        "Speaker_FL.signal": {
+            "type": "analogue",
+            "description": "FL speaker signal, set to the antenna receive signal while radio is on"
+        },
+        "Speaker_FR.signal": {
+            "type": "analogue",
+            "description": "FR speaker signal, set to the antenna receive signal while radio is on"
+        },
+        "Speaker_RL.signal": {
+            "type": "analogue",
+            "description": "RL speaker signal, set to the antenna receive signal while radio is on"
+        },
+        "Speaker_RR.signal": {
+            "type": "analogue",
+            "description": "RR speaker signal, set to the antenna receive signal while radio is on"
         }
     },
     "out": {
@@ -393,6 +437,22 @@
         "Btn_TC.is_pressed": {
             "type": "bool",
             "description": "Traction control button pressed"
+        },
+        "Radio_Switch.value": {
+            "type": "integer",
+            "description": "Radio switch: 0 off, 1-6 radio channel 0-5"
+        },
+        "Btn_Mic.is_pressed": {
+            "type": "bool",
+            "description": "Microphone button pressed; transmits while true"
+        },
+        "Microphone.signal": {
+            "type": "analogue",
+            "description": "Microphone signal"
+        },
+        "Antenna.receive_signal": {
+            "type": "analogue",
+            "description": "Antenna received signal"
         }
     }
 }
