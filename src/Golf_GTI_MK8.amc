@@ -164,6 +164,10 @@ var HYSTERESIS_MAX = 0.15
 define var fractional HYSTERESIS_MIN
 var HYSTERESIS_MIN = 0.03
 
+# opposite shift cooldown ticks
+define var integer SHIFT_COOLDOWN_TICKS
+var SHIFT_COOLDOWN_TICKS = 60
+
 # brake downshift assist min
 define var fractional BRAKE_DOWNSHIFT_MIN
 var BRAKE_DOWNSHIFT_MIN = 0.05
@@ -219,6 +223,15 @@ var lastPaddle = 0.0
 # gearbox pulse cooldown
 define var bool gearboxPulseCooldown
 var gearboxPulseCooldown = false
+
+# last auto shift direction
+# 1 up, -1 down, 0 none
+define var integer lastShiftDirection
+var lastShiftDirection = 0
+
+# opposite shift cooldown
+define var integer shiftCooldown
+var shiftCooldown = 0
 
 # anti-stall active flag
 define var bool antiStall
@@ -695,6 +708,16 @@ define function transmission_on_tick ()
 	# gear stick selection
 	requires (out Gear_Stick.throttle)
 	{
+		if (! (out Gear_Stick.throttle == 2))
+		{
+			var shiftCooldown = 0
+			var lastShiftDirection = 0
+		}
+		elseif (var shiftCooldown > 0)
+		{
+			var shiftCooldown = var shiftCooldown - 1
+		}
+
 		if (out Gear_Stick.throttle == 0)
 		{
 			# neutral
@@ -745,8 +768,12 @@ define function transmission_on_tick ()
 										{
 											define var fractional upRpm
 											define var bool canUp
+											define var bool upAllowed
+											define var bool downAllowed
 											define var integer downTargetGear
 											var canUp = false
+											var upAllowed = true
+											var downAllowed = true
 											var downTargetGear = var targetGear
 
 											if ((var targetGear < 6) && (var brakePedal <= var BRAKE_DOWNSHIFT_MIN))
@@ -768,13 +795,30 @@ define function transmission_on_tick ()
 												call downshift_target (var targetGear, var downTheta, out Engine.rps, var downTargetGear)
 											}
 
-											if (var canUp)
+											# block opposite shift
+											if (var shiftCooldown > 0)
+											{
+												if (var lastShiftDirection > 0)
+												{
+													var downAllowed = false
+												}
+												elseif (var lastShiftDirection < 0)
+												{
+													var upAllowed = false
+												}
+											}
+
+											if (var canUp && var upAllowed)
 											{
 												var targetGear = var targetGear + 1
+												var lastShiftDirection = 1
+												var shiftCooldown = var SHIFT_COOLDOWN_TICKS
 											}
-											elseif (var downTargetGear < var targetGear)
+											elseif ((var downTargetGear < var targetGear) && var downAllowed)
 											{
 												var targetGear = var downTargetGear
+												var lastShiftDirection = -1
+												var shiftCooldown = var SHIFT_COOLDOWN_TICKS
 											}
 										}
 									}
