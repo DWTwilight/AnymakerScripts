@@ -50,7 +50,7 @@ const TYPES = new Map([
   ['integer', { signature: 'integer', description: '32-bit signed integer. Division/modulo truncate toward zero; division by zero returns 0.' }],
   ['fractional', { signature: 'fractional', description: '32-bit float. Needs a digit before the dot (`0.5`); exponent notation is not supported.' }],
   ['string', { signature: 'string', description: 'Double-quoted with no escape sequences. Supports `len` and `==`; there is no concatenation.' }],
-  ['analogue', { signature: 'analogue', description: 'Stream-like scalar. Semantics and null handling are outside the current scope.' }],
+  ['analogue', { signature: 'analogue', description: 'Opaque, non-numeric value. Only another analogue value can be assigned to it; literals are not valid. Uninitialized analogue is null.' }],
 ]);
 
 const BUILTIN_PARAMS = new Map([

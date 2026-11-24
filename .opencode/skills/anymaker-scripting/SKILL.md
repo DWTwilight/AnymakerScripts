@@ -66,7 +66,7 @@ A comment is a `#` line, limited to **31 characters**:
 | `integer`    | built-in scalar     | `define var integer <name>`                |
 | `fractional` | built-in scalar     | `define var fractional <name>`             |
 | `string`     | built-in scalar     | `define var string <name>`                 |
-| `analogue`   | stream-like scalar  | `define var analogue <name>`               |
+| `analogue`   | opaque scalar       | `define var analogue <name>`               |
 | `list`       | generic container   | `define list <elementType> <name>`         |
 | custom type  | user-defined record | `define var <TypeName> <name>`             |
 
@@ -107,6 +107,19 @@ An uninitialized declaration holds the type default: `false`, `0`, `0`, `""`,
 - `[]` is not writable syntax; it only describes a newly created empty list.
 - A custom type's members default to the defaults above.
 - Do not rely on any of this; assign explicitly.
+
+### Analogue values
+
+`analogue` is an opaque, non-numeric type, not a number.
+
+- Only another `analogue` value can be assigned to an `analogue` variable:
+  `var b = var a` or `var b = out Some.analogue_value`.
+- Literals are invalid: `var anaVal = 0.0`, `var anaVal = true`, and
+  `var anaVal = "x"` are all type errors.
+- Do not use analogues in arithmetic or math functions; they are not numeric.
+- `==` compares two analogue values; mixing analogue with another type is
+  rejected.
+- An uninitialized `analogue` is `null`. There is no `null` literal.
 
 ## Variables
 
@@ -154,6 +167,9 @@ Assign with `var <name> = <value>`. `define var` declares; `var` assigns:
 define var integer intVal
 var intVal = 1
 ```
+
+The assigned value's type must match the variable's type, including `analogue`
+(only another analogue value can be assigned).
 
 Use **one statement per line** — semicolons and multiple statements on a line
 are not supported.
@@ -704,7 +720,7 @@ state.
 
 ## Out of scope
 
-- `analogue` semantics; `requires` covers databus availability (null) checks.
+- `analogue` value semantics beyond type matching and its null default.
 - String manipulation beyond `len` and `==` (there is no concatenation).
 - Databus `in` / `out` names and types, which the user supplies. The optional
   same-basename `.json` is only an editor helper and is not required by the

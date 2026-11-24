@@ -262,7 +262,7 @@ async function provideHover(document, position) {
     const label = view.type ? `**${view.label}** · \`${view.type}\`` : `**${view.label}**`;
     markdown.appendMarkdown(`${label}\n\n`);
     markdown.appendCodeblock(view.code, 'anymaker');
-    if (decl.kind === 'global') {
+    if (decl.kind === 'global' && decl.type !== 'analogue') {
       const constant = getConstants(document).get(decl.name);
       if (constant) {
         markdown.appendMarkdown(`\n\n**Value:** \`${constant.display}\``);

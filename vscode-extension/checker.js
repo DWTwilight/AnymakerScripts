@@ -785,7 +785,7 @@ class Checker {
         const member = this.types.get(base.type).members.get(memberTok.value);
         if (!member) this.reportAt(memberTok, `unknown member '${memberTok.value}'`);
         else lhs = member.type;
-      } else if (base.type !== 'unknown' && base.type !== 'analogue') {
+      } else if (base.type !== 'unknown') {
         this.reportAt(memberTok, `type '${base.type}' has no members`);
       }
 
@@ -1402,7 +1402,7 @@ class Checker {
     } else if (sym.kind === 'param') {
       this.reportAt(nameTok, `'${nameTok.value}' is a parameter; use 'param ${nameTok.value}'`);
     } else {
-      type = sym.type === 'analogue' ? 'unknown' : sym.type;
+      type = sym.type;
     }
 
     if (this.check('.')) {
@@ -1463,7 +1463,7 @@ class Checker {
     } else if (sym.kind !== 'param') {
       this.reportAt(nameTok, `'${nameTok.value}' is not a parameter; use 'var ${nameTok.value}'`);
     } else {
-      type = sym.type === 'analogue' ? 'unknown' : sym.type;
+      type = sym.type;
     }
 
     if (this.check('.')) {
@@ -1515,7 +1515,7 @@ class Checker {
     if (!this.schema || known) {
       this.warnUncheckedDatabus('out', path, { start: first.start, end: last.end });
     }
-    if (!known || known === 'analogue') return 'unknown';
+    if (!known) return 'unknown';
     return known;
   }
 
@@ -1637,7 +1637,7 @@ class Checker {
   }
 
   checkAssign(lhs, rhs, token, context) {
-    if (lhs === 'unknown' || rhs === 'unknown' || lhs === 'analogue' || rhs === 'analogue') return;
+    if (lhs === 'unknown' || rhs === 'unknown') return;
     if (isListType(lhs)) {
       this.reportAt(token, 'lists cannot be assigned or copied');
       return;
