@@ -1,6 +1,6 @@
 # Golf GTI MK8 Scripting Context
 
-## Shared Globals(make sure gets updated first before use)
+## Shared Globals (make sure gets updated first before use)
 
 Globals declared at the top of the script, shared between functions:
 
@@ -10,6 +10,32 @@ Globals declared at the top of the script, shared between functions:
   - 0 -> off
   - 1 -> Main Power On
   - 2 -> Engine Start (and Main Power On)
+- targetGear
+  - Integer
+  - desired transmission gear, owned by Transmission, read by Power & Lights,
+    Engine, and Brake
+  - 0 -> neutral, -1 -> reverse, 1-6 -> forward
+- antiStall
+  - Boolean
+  - transmission anti-stall flag (fake neutral), read by Engine's TC gate
+- brakePedal
+  - Fractional
+  - effective brake pedal (0-1) including autohold, owned by Brake, read by
+    Power & Lights, Transmission, and Engine
+- speedKmh
+  - Fractional
+  - vehicle speed (km/h), owned by Brake, read by the speed dial
+- tickCount
+  - Integer
+  - wraps every `DIAL_BLINK_TICKS * 2` ticks and drives all blinker phases
+- latched button state and edge detectors
+  - `lastStartStopPressd`, `lastHandbrakePressed`, `lastAutoholdPressed`,
+    `lastABSPressed`, `lastTCPressed`, `lastHazardPressed`
+  - `handbrakeActive`, `autoholdEnabled`, `autoholdActive`, `absEnabled`,
+    `tcEnabled`, `hazardEnabled`
+- transmission state
+  - `lastGearMode`, `lastPaddle`, `lastShiftDirection`, `shiftCooldown`,
+    `gearboxPulseCooldown`
 
 ## Doors and Locks
 
@@ -84,9 +110,6 @@ Latch is open if handle is active and not locked
 - Switch_Light_IntR.is_pressed
   - Boolean
   - controls interior lights(rear)
-- ASM_Blinker.input
-  - Fractional
-  - Blinker Relay(1 -> on, but only to make sound for Hazard Light)
 
 ### Databus Outputs (In Variables)
 
@@ -114,6 +137,9 @@ Latch is open if handle is active and not locked
 - ASM_High_Beam.input
   - Fractional
   - High Beam Power Relay(1 -> on)
+- ASM_Blinker.input
+  - Fractional
+  - Blinker Relay(1 -> on, but only to make sound for Hazard Light)
 - Btn_Hazard_Light.is_illuminated
   - Boolean
   - backlight on/off, on when either powerState > 0 or hazard blinking
@@ -168,9 +194,9 @@ powerState
   rising edge; while enabled all turn lights (`Light_Turn_L1-3`,
   `Light_Turn_R1-3`) blink using the existing `tickCount` / `DIAL_BLINK_TICKS`
   phase (on for the first half, off for the second half)
-- rear lights (`Light_Rear_1-6`) on when braking (`brakePedal > 0`) or
+- rear lights (`Light_Rear_1-6`) on when braking (`brakePedal > 0.01`) or
   `Light_Switch.value > 0`
-- brake lights (`Light_Brake_1-3`) on when braking (`brakePedal > 0`)
+- brake lights (`Light_Brake_1-3`) on when braking (`brakePedal > 0.01`)
 - reverse light (`Light_Reverse.is_illuminated`) on when `targetGear == -1`
 - hazard button backlight (`Btn_Hazard_Light.is_illuminated`) is steady on when
   `powerState > 0`, and blinks with the hazard phase when hazard mode is on
@@ -238,15 +264,32 @@ powerState
 - ASM_Gearbox.input
   - value treats as pulse, so if gear jump is needed (3 -> 1, 3 -> 0), the value needs to blink, and watch Gearbox.target_gear as target
 - Anti-stall
-  - define constant: `ANTI_STALL_RPS = 9`
-  - if engine rps is below `ANTI_STALL_RPS`, force to neutral (by only directly changing gearbox -> 0, no need to change reducer)
-  - this is a fake neutral, internal state should still be the original gear (1-6)
-  - recovers if break is lifted (< 0.2? define a constant for this)
+  - constants: `ANTI_STALL_RPS = 10.0`, `ANTI_STALL_RECOVER_BRAKE = 0.01`,
+    `LAUNCH_THROTTLE = 0.95`
+  - if engine rps is below `ANTI_STALL_RPS`, force to neutral (the desired
+    gearbox gear becomes 0; the reducer stays on the target gear)
+  - this is a fake neutral, internal state `targetGear` still holds the original
+    gear (1-6)
+  - recovers when the brake is released
+    (`brakePedal < ANTI_STALL_RECOVER_BRAKE`) or the driver floors the throttle
+    (`Steering_Wheel.right_pedal > LAUNCH_THROTTLE`)
+  - while in drive mode and `antiStall`, `targetGear` is held at 1
 
 #### Impl
 
 - Gear display: `Display_Gear.display_value` = `targetGear` (0 neutral, 1-6
   forward), or `9` when `targetGear == -1` (reverse)
+- Reducer: `targetGear >= 4` engages reducer B
+  (`ASM_Reducer_A.input = 1.0`, `ASM_Reducer_B.input = 0.0`), otherwise reducer
+  A (`A = 0.0`, `B = 1.0`)
+- Physical gearbox gear: 0/-1 stay as-is; 1-3 map to 1-3 on reducer A and 4-6
+  map to 1-3 on reducer B (`desiredGearboxGear = desiredGear <= 3 ?
+  desiredGear : desiredGear - 3`)
+- `ASM_Gearbox.input` is a one-tick pulse: when `Gearbox.target_gear` is below
+  the desired gearbox gear it writes `1.0`, above it writes `-1.0`, and the
+  next tick writes `0.0` (`gearboxPulseCooldown`)
+- While `antiStall`, `desiredGear` is forced to `0` (fake neutral) but
+  `targetGear` is left unchanged
 
 #### Drive mode (auto shift)
 
@@ -267,11 +310,14 @@ to the physical 3x2 gearbox.
 **Constants**
 
 ```txt
-RPM_PER_RPS        = 60.0
-SHIFT_CURVE_K      = 1.5
-GEAR_RATIO_STEP    = 0.72      # ratio(g+1) / ratio(g), uniform
-HYSTERESIS_MAX     = 0.25      # h at theta = 0
-HYSTERESIS_MIN     = 0.08      # h at theta = 1
+RPM_PER_RPS          = 60.0
+SHIFT_CURVE_K        = 1.5
+GEAR_RATIO_STEP      = 0.72    # ratio(g+1) / ratio(g), uniform
+HYSTERESIS_MAX       = 0.15    # h at theta = 0
+HYSTERESIS_MIN       = 0.03    # h at theta = 1
+SHIFT_COOLDOWN_TICKS = 60      # ticks blocking an opposite shift
+BRAKE_DOWNSHIFT_MIN  = 0.05    # brake pedal to enable downshift assist
+BRAKE_DOWNSHIFT_GAIN = 0.8     # brake -> downshift theta gain
 
 # upshift base (theta=0) and limit (theta=1), gears 1..5
 define list fractional UPSHIFT_BASE
@@ -282,28 +328,28 @@ Per-gear upshift base and full-throttle limit (RPM):
 
 | Gear  | Base (theta=0) | Limit (theta=1) |
 | :---: | :------------: | :-------------: |
-| 1->2  |      1800      |      4000       |
-| 2->3  |      2000      |      4500       |
-| 3->4  |      2200      |      5000       |
-| 4->5  |      2400      |      5500       |
-| 5->6  |      2600      |      6000       |
+| 1->2  |      1500      |      3000       |
+| 2->3  |      1800      |      3500       |
+| 3->4  |      2000      |      3900       |
+| 4->5  |      2200      |      4200       |
+| 5->6  |      2400      |      4400       |
 
 **Global init (runs once at load)**
 
 ```txt
 var UPSHIFT_BASE append (0.0)      # dummy at index 0, unused
+var UPSHIFT_BASE append (1500.0)
 var UPSHIFT_BASE append (1800.0)
 var UPSHIFT_BASE append (2000.0)
 var UPSHIFT_BASE append (2200.0)
 var UPSHIFT_BASE append (2400.0)
-var UPSHIFT_BASE append (2600.0)
 
 var UPSHIFT_LIMIT append (0.0)     # dummy at index 0, unused
-var UPSHIFT_LIMIT append (4000.0)
-var UPSHIFT_LIMIT append (4500.0)
-var UPSHIFT_LIMIT append (5000.0)
-var UPSHIFT_LIMIT append (5500.0)
-var UPSHIFT_LIMIT append (6000.0)
+var UPSHIFT_LIMIT append (3000.0)
+var UPSHIFT_LIMIT append (3500.0)
+var UPSHIFT_LIMIT append (3900.0)
+var UPSHIFT_LIMIT append (4200.0)
+var UPSHIFT_LIMIT append (4400.0)
 ```
 
 The dummy at index 0 makes the lists 1-based, so gear `g` reads
@@ -317,21 +363,20 @@ RPM_up(g, theta) = UPSHIFT_BASE[g]
                  * theta ^ SHIFT_CURVE_K
 ```
 
-A flat redline is not used: 1st gear must not be held to 8400 RPM. The per-gear
-limit gives a progressive full-throttle feel and makes the theta = 0 and
-theta = 1 rows exact. `SHIFT_CURVE_K = 1.5` keeps low-throttle shifts early
+The per-gear limit gives a progressive full-throttle feel and makes the theta = 0
+and theta = 1 rows exact. `SHIFT_CURVE_K = 1.5` keeps low-throttle shifts early
 while high-throttle shifts rise steeply.
 
 Upshift table (RPM):
 
 |      theta      | 1->2  | 2->3  | 3->4  | 4->5  | 5->6  |
 | :-------------: | :---: | :---: | :---: | :---: | :---: |
-| **0%** (coast)  | 1800  | 2000  | 2200  | 2400  | 2600  |
-|     **10%**     | 1870  | 2079  | 2289  | 2498  | 2708  |
-|     **25%**     | 2075  | 2312  | 2550  | 2788  | 3025  |
-|     **50%**     | 2578  | 2884  | 3190  | 3496  | 3802  |
-|     **75%**     | 3229  | 3624  | 4019  | 4414  | 4808  |
-| **100%** (full) | 4000  | 4500  | 5000  | 5500  | 6000  |
+| **0%** (coast)  | 1500  | 1800  | 2000  | 2200  | 2400  |
+|     **10%**     | 1547  | 1854  | 2060  | 2263  | 2463  |
+|     **25%**     | 1688  | 2013  | 2238  | 2450  | 2650  |
+|     **50%**     | 2030  | 2401  | 2672  | 2907  | 3107  |
+|     **75%**     | 2474  | 2904  | 3234  | 3499  | 3699  |
+| **100%** (full) | 3000  | 3500  | 3900  | 4200  | 4400  |
 
 **Downshift**
 
@@ -354,20 +399,26 @@ Downshift trigger table (RPM, in the **current** gear):
 
 |      theta      | 6->5  | 5->4  | 4->3  | 3->2  | 2->1  |
 | :-------------: | :---: | :---: | :---: | :---: | :---: |
-| **0%** (coast)  | 1404  | 1296  | 1188  | 1080  |  972  |
-|     **10%**     | 1495  | 1380  | 1264  | 1148  | 1032  |
-|     **25%**     | 1726  | 1591  | 1455  | 1320  | 1184  |
-|     **50%**     | 2286  | 2102  | 1918  | 1734  | 1550  |
-|     **75%**     | 3038  | 2788  | 2539  | 2290  | 2040  |
-| **100%** (full) | 3974  | 3643  | 3312  | 2981  | 2650  |
+| **0%** (coast)  | 1469  | 1346  | 1224  | 1102  |  918  |
+|     **10%**     | 1529  | 1405  | 1279  | 1151  |  960  |
+|     **25%**     | 1679  | 1552  | 1418  | 1275  | 1069  |
+|     **50%**     | 2036  | 1905  | 1751  | 1573  | 1330  |
+|     **75%**     | 2504  | 2368  | 2189  | 1966  | 1675  |
+| **100%** (full) | 3073  | 2933  | 2724  | 2444  | 2095  |
 
 For reference, the resulting post-shift RPM in the lower gear is
-`RPM_up(g-1) * (1 - h)`: for 2->1 that is 1350 RPM at 0% and 3680 RPM at 100%.
+`RPM_up(g-1) * (1 - h)`: for 2->1 that is 1275 RPM at 0% and 2910 RPM at 100%.
 
-**Decision per tick**
+**Decision per tick (drive mode)**
 
 ```txt
-if (Gear_Stick.throttle == 2) && (antiStall):
+# mode change into drive
+if (Gear_Stick.throttle == 2) && (lastGearMode != 2) && (targetGear < 1):
+    antiStall = true
+    targetGear = 1
+
+# while in drive with anti-stall, hold 1st
+if (Gear_Stick.throttle == 2) && (lastGearMode == 2) && (antiStall):
     targetGear = 1
 
 autoAllowed = (Gear_Stick.throttle == 2)
@@ -375,45 +426,79 @@ autoAllowed = (Gear_Stick.throttle == 2)
            && (!antiStall)
            && (Gearbox.clutch_factor >= 1)
            && (Gearbox.current_gear == Gearbox.target_gear)
+           && (targetGear >= 1) && (targetGear <= 6)
 
-if autoAllowed && targetGear >= 1 && targetGear <= 6:
+if (autoAllowed):
     g = targetGear
-    desired = g
+    canUp = false
+    upAllowed = true
+    downAllowed = true
+    downTarget = g
 
-    if g < 6 && Engine.rps > RPM_up(g, theta) / RPM_PER_RPS:
-        desired = g + 1
-    elseif g > 1 && Engine.rps < RPM_down(g, theta) / RPM_PER_RPS:
-        desired = g - 1
+    if (g < 6) && (brakePedal <= BRAKE_DOWNSHIFT_MIN):
+        canUp = Engine.rps > RPM_up(g, theta) / RPM_PER_RPS
 
-    if desired != g:
-        targetGear = desired
+    if (!canUp) && (g > 1):
+        downTheta = theta
+        if (brakePedal > BRAKE_DOWNSHIFT_MIN):
+            downTheta = max(theta, brakePedal * BRAKE_DOWNSHIFT_GAIN)
+        downTarget = downshift_target(g, downTheta, Engine.rps)
+
+    # opposite-shift cooldown
+    if (shiftCooldown > 0) && (lastShiftDirection > 0):
+        downAllowed = false
+    elseif (shiftCooldown > 0) && (lastShiftDirection < 0):
+        upAllowed = false
+
+    if (canUp) && (upAllowed):
+        targetGear = g + 1
+        lastShiftDirection = 1
+        shiftCooldown = SHIFT_COOLDOWN_TICKS
+    elseif (downTarget < g) && (downAllowed):
+        targetGear = downTarget
+        lastShiftDirection = -1
+        shiftCooldown = SHIFT_COOLDOWN_TICKS
+```
+
+`downshift_target(g, theta, rpmNow)` scans `checkGear` from 1 up to `g - 1` and
+returns the first (lowest) gear that is still safe; if none is safe it returns
+`g`:
+
+```txt
+checkUpRpm = RPM_up(checkGear, theta)
+ratioPow   = GEAR_RATIO_STEP ^ (g - checkGear)
+trigger    = (checkUpRpm / RPM_PER_RPS) * ratioPow * (1 - h(theta))
+if (rpmNow < trigger): return checkGear
 ```
 
 **Rules / caveats**
 
 - Auto shifting only runs in drive mode; reverse (`targetGear == -1`) and
   neutral (`targetGear == 0`) are left to the gear-stick handling.
-- While `antiStall` is active in drive mode, force `targetGear = 1` and freeze
+- While `antiStall` is active in drive mode, hold `targetGear = 1` and freeze
   auto decisions. Anti-stall puts the gearbox in a fake neutral, so `Engine.rps`
   no longer tracks wheel speed; when it recovers the car resumes in 1st.
 - Freeze while `Gearbox.current_gear != Gearbox.target_gear` or
   `clutch_factor < 1` (a shift is in progress). The gearbox may jump several
   gears in a few ticks; the game handles the mechanical jump, so only wait for
   it to settle rather than sequencing reducer pulses.
+- Upshifts are suppressed while braking (`brakePedal > BRAKE_DOWNSHIFT_MIN`).
+- Brake downshift assist: while braking, the downshift theta becomes
+  `max(throttle, brakePedal * BRAKE_DOWNSHIFT_GAIN)`, so the box kicks down
+  earlier under braking.
+- `downshift_target` can skip gears, so flooring the pedal may drop several
+  gears in one decision instead of one per completed shift.
+- After any shift, `SHIFT_COOLDOWN_TICKS` ticks block the opposite direction to
+  stop up/down hunting; the cooldown resets when the stick leaves drive.
 - Decisions are re-evaluated only after the current shift completes
   (`current_gear == target_gear` and `clutch_factor >= 1`); there is no separate
   settle timer.
 - All thresholds are in RPM; compare against `Engine.rps` only after dividing
   by `RPM_PER_RPS`.
-- If the scripting language rejects a fractional exponent, compute
-  `theta ^ 1.5` as `exp(1.5 * ln(max(theta, epsilon)))` and guard `theta = 0`.
-- Flooring the pedal naturally cascades downshifts one gear per completed
-  shift, so there is no separate skip-a-gear kickdown. That aggressive behavior
-  is left for a future S mode if wanted.
 - At a standstill in gear 1 there is nothing to downshift; the car simply stays
   in 1st until the upshift line is crossed.
-- Drive-mode engagement still starts in 1st with `antiStall` set, as it does
-  today; auto shifting resumes once anti-stall clears and the gearbox settles.
+- Drive-mode engagement still starts in 1st with `antiStall` set; auto shifting
+  resumes once anti-stall clears and the gearbox settles.
 
 ## Engine
 
@@ -464,31 +549,31 @@ if autoAllowed && targetGear >= 1 && targetGear <= 6:
   - Actual Engine Throttle Input, 0(no Throttle) -> 1(full Throttle)
 - Dial_RPM.display_value
   - Fractional
-  - -1 - 1, RPS 0 -> -1, RPS 150 -> 1
+  - -0.95 - 0.95, RPS 0 -> -0.95, RPS 150 -> 0.95
 - Btn_TC.is_illuminated
   - Boolean
   - on when TC is disabled or actively cutting, off otherwise
 - Dial_Coolant.display_value
   - Fractional
-  - coolant percentage, 0-1, map to -1 - 1
+  - coolant percentage, 0-1, map to -0.95 - 0.95
 - Dial_Coolant.is_illuminated
   - Boolean
   - on when powerState > 0, or blinks when warning(less than 0.25)
 - Dial_Oil.display_value
   - Fractional
-  - oil percentage, 0-1, map to -1 - 1
+  - oil percentage, 0-1, map to -0.95 - 0.95
 - Dial_Oil.is_illuminated
   - Boolean
   - on when powerState > 0, or blinks when warning(less than 0.25)
 - Dial_Temp.display_value
   - Fractional
-  - engine temp, 60-120,map to -1 - 1
+  - engine temp, 60-120,map to -0.95 - 0.95
 - Dial_Temp.is_illuminated
   - Boolean
   - on when powerState > 0, or blinks when warning(>100)
 - Dial_Fuel.display_value
   - Fractional
-  - oil percentage, 0-1, map to -1 - 1
+  - oil percentage, 0-1, map to -0.95 - 0.95
 - Dial_Fuel.is_illuminated
   - Boolean
   - on when powerState > 0, or blinks when warning(less than 0.1)
@@ -500,10 +585,11 @@ Global state:
 ```txt
 powerState         # declared at top of script, owned by Power & Lights
 
-IDLE_RPS = 13.5
-SECONDARY_IDLE_RPS = 16.0
+NEUTRAL_IDLE_RPS   = 13.5    # idle target in neutral
+DRIVE_IDLE_RPS     = 15.5    # idle target in gear
 STARTER_CUTOFF_RPS = 6.5
-MIN_IDLE_THROTTLE = 0.05
+MIN_IDLE_THROTTLE  = 0.05
+MAX_IDLE_THROTTLE  = 0.25
 ```
 
 - If `powerState` is not 2:
@@ -512,25 +598,27 @@ MIN_IDLE_THROTTLE = 0.05
 - else `powerState` is 2:
   - Starter Logic:
     - set `ASM_Power_Starter.input` -> 1.0 if `Engine.rps < STARTER_CUTOFF_RPS`, else 0.0
-    - no latch needed: once RPS reaches 6.5 the starter cuts, and the throttle below stays at 1.0 until RPS > 8.5, so the engine keeps accelerating instead of chattering
+    - no latch needed: once RPS reaches 6.5 the starter cuts, and the idle
+      controller below keeps the engine running instead of chattering
   - Throttle Logic (always evaluated while `powerState` is 2):
-    1. calculate minimal throttle to keep idle (anti-stall), constant global `IDLE_RPS` (13.5)
-       - when `targetGear != 0` (not neutral), use `SECONDARY_IDLE_RPS` (16.0) instead
-       - `minimalThrottle = (idleTargetRps - Engine.rps) * 0.2`
-       - clamp `minimalThrottle` to `[MIN_IDLE_THROTTLE, 1.0]`
-       - this is 1.0 for all `Engine.rps <= 8.5`, so cranking naturally gets full throttle
-    2. apply pedal input (skipped while `antiStall` is active or while traction
-       control is cutting):
-        - `engineThrottle = minimalThrottle + (1.0 - minimalThrottle) * pedalInput`
-        - clamp `engineThrottle` to `[MIN_IDLE_THROTTLE, 1.0]`
-        - when traction control is cutting this tick the pedal term is omitted,
-          so `engineThrottle = minimalThrottle` (idle floor kept, see Traction
-          Control below)
-    3. set `ASM_Throttle.input` -> `engineThrottle`
+    1. pick the idle target: `NEUTRAL_IDLE_RPS` (13.5) when `targetGear == 0`,
+       else `DRIVE_IDLE_RPS` (15.5)
+    2. calculate minimal throttle to keep idle:
+       - `rawMinimal = (idleTargetRps - Engine.rps) * 0.2`
+       - if `targetGear != 0` and `brakePedal > ANTI_STALL_RECOVER_BRAKE` and
+         not `antiStall`, set `rawMinimal = MIN_IDLE_THROTTLE`
+       - clamp `rawMinimal` to `[MIN_IDLE_THROTTLE, MAX_IDLE_THROTTLE]`
+    3. apply pedal input (skipped while traction control is cutting):
+       - `rawThrottle = rawThrottle + (1.0 - rawThrottle) * pedalInput *
+         (0.2 + 0.8 * Gearbox.clutch_factor)`
+       - the clutch factor fades the pedal in as the clutch engages
+    4. clamp `rawThrottle` to `[MIN_IDLE_THROTTLE, 1.0]`, then write
+       `ASM_Throttle.input`
 - RPM dial: `Dial_RPM.display_value = dial_map(Engine.rps, 0, DIAL_RPM_MAX)`
 
-`dial_map(input, min, max)` maps `[min, max]` to `[-1, 1]` and clamps the result
-to `[-1, 1]`.
+`dial_map(input, min, max, limit)` maps `[min, max]` to `[-limit, limit]` and
+clamps the result to `[-limit, limit]`. All dials pass `limit = 0.95`, so their
+usable range is `[-0.95, 0.95]`.
 
 ### Traction Control
 
@@ -592,6 +680,7 @@ powerState == 2
 targetGear != 0
 ! antiStall
 tcEnabled
+brakePedal < TRACTION_MIN_PEDAL
 Steering_Wheel.right_pedal > TRACTION_MIN_PEDAL
 all four wheel-rps databus variables available
 ```
@@ -604,7 +693,8 @@ use the clamped idle/anti-stall throttle:
 ```txt
 engineThrottle = minimalThrottle                              # traction cut
 engineThrottle = minimalThrottle
-               + (1.0 - minimalThrottle) * pedalInput         # normal
+               + (1.0 - minimalThrottle) * pedalInput
+               * (0.2 + 0.8 * Gearbox.clutch_factor)          # normal
 ```
 
 The result is clamped to `[MIN_IDLE_THROTTLE, 1.0]` as before. The idle floor is
@@ -642,6 +732,10 @@ Btn_TC.is_illuminated = (! tcEnabled) || slip
   cornering false positives.
 - Requiring all four wheel variables prevents a missing rear databus from
   leaving `rearAvg == 0` and producing a false cut.
+- The `brakePedal < TRACTION_MIN_PEDAL` gate keeps TC from fighting the brakes;
+  while braking, ABS owns the wheel-speed problem.
+- The pedal blend also requires `Gearbox.clutch_factor`; if it is unavailable
+  the pedal term is skipped for that tick.
 - The `antiStall` gate avoids acting while the transmission holds the gearbox in
   its fake neutral, where the front wheels are not being driven.
 - The detector is stateless, so a front speed hovering at the threshold can
@@ -739,7 +833,7 @@ side. A right turn gives `Right = +inner`, `Left = -outer`; a left turn gives
   - abs button light switch
 - Dial_Speed.display_value
   - Fractional
-  - -1 - 1. 0 km/h -> -1, 240 km/h -> 1
+  - -0.95 - 0.95. 0 km/h -> -0.95, 240 km/h -> 0.95
 
 ### Logic
 
@@ -748,13 +842,11 @@ side. A right turn gives `Right = +inner`, `Left = -outer`; a left turn gives
 - `REAR_BRAKE_RATIO = 3.0 / 7.0`
   - rear pressure per unit of front pressure, from `front:rear = 7:3`
   - front is the reference (gets the full proxy pedal); rear is proportional
-- `MAX_BRAKE_PRESSURE = 0.5`
-  - final scale applied to every wheel's brake pressure output
 - `AUTOHOLD_STOP_RPS = 0.1`
   - `abs(wheel.rps)` below this counts as a stopped wheel
 - `AUTOHOLD_RELEASE_THROTTLE = 0.1`
   - driver throttle above this releases autohold
-- `ABS_MIN_BRAKE = 0.2`
+- `ABS_MIN_BRAKE = 0.1`
   - ABS is only evaluated when `brakePedal > ABS_MIN_BRAKE`
 - `ABS_TARGET_SPEED_RATIO = 0.8`
   - target wheel speed as a fraction of `refSpeed`; below this the wheel is
@@ -903,15 +995,12 @@ reading positive in reverse.
 - Rear base: `brakePedal * REAR_BRAKE_RATIO`, or `1.0` when `handbrakeActive`
   (bypassing the ratio; front is unaffected)
 - ABS: each wheel output is multiplied by its `absFactorX`
-- final scale: every wheel output is multiplied by `MAX_BRAKE_PRESSURE`
-- so `FL = frontBase * absFactorFL * MAX_BRAKE_PRESSURE`,
-  `FR = frontBase * absFactorFR * MAX_BRAKE_PRESSURE`,
-  `RL = rearBase * absFactorRL * MAX_BRAKE_PRESSURE`,
-  `RR = rearBase * absFactorRR * MAX_BRAKE_PRESSURE`
-- no clamping is needed: the pedal is in `[0, 1]`, `REAR_BRAKE_RATIO < 1`,
-  `MAX_BRAKE_PRESSURE < 1`, and each ABS factor is in `[0, 1]`
+- so `FL = frontBase * absFactorFL`, `FR = frontBase * absFactorFR`,
+  `RL = rearBase * absFactorRL`, `RR = rearBase * absFactorRR`
+- no clamping is needed: the pedal is in `[0, 1]`, `REAR_BRAKE_RATIO < 1`, and
+  each ABS factor is in `[0, 1]`
 
-Base combinations (before ABS modulation and `MAX_BRAKE_PRESSURE`):
+Base combinations (before ABS modulation):
 
 - pedal only: front = pedal, rear = pedal * 3/7
 - handbrake only: front = 0, rear = 1.0
